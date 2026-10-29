@@ -81,6 +81,27 @@ function nativeFixture(){
  const session={install:true,cancelled:false,children:new Set(),requests:new Set(),check(){if(this.cancelled)throw new Error('设置已取消');}};
  return {n,owner,session,root,tmp,cleanup:()=>fs.rmSync(tmp,{recursive:true,force:true}),context};
 }
+test('native bootstrap disables external uv configuration while preserving HOME',()=>{
+ const f=nativeFixture();try{
+  f.context.Services.io={newFileURI:()=>({spec:'file:///fixture/python-downloads.json'})};
+  f.context.Services.dirsvc.get=()=>({path:process.env.HOME});
+  const env=f.n.environmentValues();assert.equal(env.HOME,process.env.HOME);assert.equal(env.UV_NO_CONFIG,'1');
+ }finally{f.cleanup();}
+});
+test('native uv can create its pinned Python environment despite discovered uv.toml',{
+ skip:!process.env.PAPER_COMPANION_TEST_UV||!process.env.PAPER_COMPANION_TEST_PYTHON?'set PAPER_COMPANION_TEST_UV and PAPER_COMPANION_TEST_PYTHON to run pinned uv integration':false
+},()=>{
+ const f=nativeFixture();try{
+  f.context.Services.io={newFileURI:()=>({spec:'file:///fixture/python-downloads.json'})};
+  f.context.Services.dirsvc.get=()=>({path:process.env.HOME});
+  fs.mkdirSync(path.join(f.root,'tmp'));fs.writeFileSync(path.join(f.tmp,'uv.toml'),'required-version = "<0.1"\npython-downloads = "never"\n');
+  const env=f.n.environmentValues(),args=['venv','--managed-python','--python',process.env.PAPER_COMPANION_TEST_PYTHON,path.join(f.root,'venv')];
+  const run=environment=>require('node:child_process').spawnSync(process.env.PAPER_COMPANION_TEST_UV,args,{env:environment,cwd:f.tmp,encoding:'utf8'});
+  const inherited={...env};delete inherited.UV_NO_CONFIG;const blocked=run(inherited);
+  assert.notEqual(blocked.status,0);assert.match(blocked.stderr,/Required uv version/);
+  const installed=run(env);assert.equal(installed.status,0,installed.stderr);assert.ok(fs.existsSync(path.join(f.root,'venv','bin','python')));
+ }finally{f.cleanup();}
+});
 test('native lock refuses a live foreign owner and releases only its own nonce',async()=>{
  const f=nativeFixture();try{
   await f.n.prepare(f.session);await f.n.acquire(f.session);const lock=path.join(f.root,'setup.lock');assert.equal(fs.existsSync(lock),true);

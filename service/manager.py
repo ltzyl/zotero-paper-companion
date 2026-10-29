@@ -302,7 +302,7 @@ class Manager:
         self.version=digest.hexdigest()[:24]
         self.data=self.root/'data';self.data.mkdir(exist_ok=True,mode=0o700)
         self.env={k:v for k,v in os.environ.items() if k in ('HOME','PATH','TMPDIR','LANG','LC_ALL','SYSTEMROOT')}
-        self.env.update(PAPER_COMPANION_DATA=str(self.data),UV_CACHE_DIR=str(self.root/'cache'/'uv'),UV_PYTHON_INSTALL_DIR=str(self.root/'python'),PYTHONNOUSERSITE='1',PYTHONUNBUFFERED='1',MACOSX_DEPLOYMENT_TARGET='14.0')
+        self.env.update(PAPER_COMPANION_DATA=str(self.data),UV_NO_CONFIG='1',UV_CACHE_DIR=str(self.root/'cache'/'uv'),UV_PYTHON_INSTALL_DIR=str(self.root/'python'),PYTHONNOUSERSITE='1',PYTHONUNBUFFERED='1',MACOSX_DEPLOYMENT_TARGET='14.0')
         self.monitor=threading.Thread(target=self._monitor,daemon=True)
     def _monitor(self):
         while True:

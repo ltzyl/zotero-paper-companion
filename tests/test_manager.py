@@ -136,9 +136,24 @@ class ManagerTests(unittest.TestCase):
             self.assertEqual(seen,[])
         finally:server.shutdown();server.server_close();thread.join()
     def make_manager(self):return m.Manager(self.root/'managed',self.root/'uv',SERVICE,os.getpid())
+    @unittest.skipUnless(os.environ.get('PAPER_COMPANION_TEST_UV') and os.environ.get('PAPER_COMPANION_TEST_PYTHON'), 'set PAPER_COMPANION_TEST_UV and PAPER_COMPANION_TEST_PYTHON to run pinned uv integration')
+    def test_uv_install_ignores_discovered_config_after_environment_filter(self):
+        manager=m.Manager(self.root/'managed',os.environ['PAPER_COMPANION_TEST_UV'],SERVICE,os.getpid())
+        (self.root/'uv.toml').write_text('required-version = "<0.1"\npython-downloads = "never"\n')
+        command=[str(manager.uv),'venv','--managed-python','--python',os.environ['PAPER_COMPANION_TEST_PYTHON'],str(self.root/'venv')]
+        inherited=dict(manager.env);inherited.pop('UV_NO_CONFIG',None)
+        blocked=subprocess.run(command,cwd=self.root,env=inherited,capture_output=True,text=True,timeout=30)
+        self.assertNotEqual(blocked.returncode,0);self.assertIn('Required uv version',blocked.stderr)
+        try:
+            manager.command(command,cwd=self.root,timeout=30)
+            self.assertTrue((self.root/'venv'/'bin'/'python').is_file())
+            requirements=self.root/'empty.lock';requirements.write_text('')
+            manager.command([str(manager.uv),'pip','sync','--python',str(self.root/'venv'/'bin'/'python'),'--require-hashes',str(requirements)],cwd=self.root,timeout=30)
+        finally: manager.children.close()
     def test_manager_preserves_home_and_uses_explicit_private_data(self):
         manager=self.make_manager()
         self.assertEqual(manager.env.get('HOME'),os.environ.get('HOME'))
+        self.assertEqual(manager.env.get('UV_NO_CONFIG'),'1')
         self.assertEqual(manager.env.get('PAPER_COMPANION_DATA'),str(manager.root/'data'))
         self.assertNotEqual(pathlib.Path(manager.env['PAPER_COMPANION_DATA']),pathlib.Path.home())
     def test_dependency_path_patches_are_hash_checked_and_never_use_home(self):

@@ -109,7 +109,7 @@ var PaperInstallerNative=class{
  args(command){return [PathUtils.join(this.owner.resources,'manager.py'),'--root',this.root,'--uv',this.owner.uv,'--resources',this.owner.resources,'--parent-pid',String(Services.appinfo.processID),command];}
  async progress(session,emit){
   try{session.check();const info=JSON.parse(await IOUtils.readUTF8(this.path('progress.json')));if(['engine','assets','ollama','model','validate'].includes(info.phase)&&info.status==='running'){
-   const labels={engine:'安装翻译组件',assets:'下载 PDF 字体和版面识别资源',ollama:'安装本地模型运行组件',model:'下载本地总结模型',validate:'检查翻译组件和本地总结模型'};
+   const labels={engine:'安装翻译组件（自动选择下载源）',assets:'下载 PDF 字体和版面识别资源',ollama:'安装本地模型运行组件',model:'下载本地总结模型',validate:'检查翻译组件和本地总结模型'};
    emit({phase:info.phase,state:'running',detail:labels[info.phase],...(Number.isSafeInteger(info.completed)&&info.completed>=0?{completed:info.completed}:{}),...(Number.isSafeInteger(info.total)&&info.total>0?{total:info.total}:{})});
   }}catch(_){}
  }

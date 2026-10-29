@@ -12,3 +12,5 @@
 - 可选期刊数据来源：<https://github.com/scigreat/addon> 与 <https://www.scigreat.com/s/app/?t=zotbox-vip>。本仓库不打包其期刊记录，也不宣称拥有 JCR、影响因子或中科院分区数据版权。来源授权、准确性、更新年份和服务可用性须独立确认。
 
 “免费、免注册”描述当前配置路径，不承诺任何第三方永久免费或永久可用。没有使用 CiteScore/SJR 冒充 JCR/影响因子。
+
+- Python 依赖下载源：PyPI（<https://pypi.org>）或清华大学开源软件镜像站（<https://mirrors.tuna.tsinghua.edu.cn/help/pypi/>）。安装器自动比较可用性与速度，使用同一份固定版本及哈希清单校验；下载源不接收文库内容。

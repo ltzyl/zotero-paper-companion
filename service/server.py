@@ -4,13 +4,14 @@
 A random per-install token is required on every request. Browser Origins are
 rejected, paths are generated internally, and PDFs stay in the local state dir.
 """
-import argparse,base64,concurrent.futures,hashlib,hmac,json,os,pathlib,re,secrets,shutil,subprocess,sys,threading,uuid
+import argparse,base64,concurrent.futures,hashlib,hmac,json,os,pathlib,re,secrets,shutil,subprocess,sys,threading,uuid,signal
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import unquote,urlsplit
 
 MAX_BODY=140*1024*1024
 class Bridge:
- def __init__(self,root):
+ def __init__(self,root,instance=None,model_url=None,components=None):
+  self.instance=instance;self.model_url=model_url;self.components=components or {}
   self.root=pathlib.Path(root).resolve();self.root.mkdir(parents=True,exist_ok=True,mode=0o700)
   self.lock=threading.RLock();self.text_lock=threading.Lock();self.pool=concurrent.futures.ThreadPoolExecutor(max_workers=1);self.jobs={};self.token_path=self.root/'token'
   if not self.token_path.exists():self.token_path.write_text(secrets.token_urlsafe(32));self.token_path.chmod(0o600)
@@ -20,6 +21,9 @@ class Bridge:
    j=json.loads(f.read_text());
    if j.get('status') in ['running','queued']:j.update(status='failed',error='Service restarted; inspect local output before retrying',active=False,finished=True)
    self.jobs[j['taskId']]=j
+ def health(self):
+  if self.instance is None:return {'status':'ok','service':'paper-companion','protocol':1}
+  return {'status':'ok','service':'paper-companion','protocol':2,'instance':self.instance,'modelURL':self.model_url,'ready':all(self.components.get(k) is True for k in ('engine','model','assets')),'components':self.components}
  def save(self,j):
   p=self.root/'jobs'/j['taskId']/'task.json';tmp=p.with_suffix('.tmp');tmp.write_text(json.dumps(j));tmp.replace(p)
  def submit(self,data):
@@ -70,7 +74,7 @@ def handler(bridge):
   def do_GET(self):
    if not self.allowed():return self.reply(403,{'error':'Forbidden'})
    path=urlsplit(self.path).path
-   if path=='/health':return self.reply(200,{'status':'ok','service':'paper-companion','protocol':1})
+   if path=='/health':return self.reply(200,bridge.health())
    if path in ('/api/tasks','/api/history'):
     with bridge.lock:jobs=[dict(j) for j in bridge.jobs.values()]
     return self.reply(200,{'tasks' if path.endswith('tasks') else 'history':jobs})
@@ -95,12 +99,28 @@ def handler(bridge):
    except Exception:self.reply(503,{'error':'Translation failed; inspect local service dependencies/network'})
  return Handler
 
+def atomic_connection(path,data):
+ path=pathlib.Path(path);tmp=path.with_name('.'+path.name+'.'+secrets.token_hex(6));tmp.write_text(json.dumps(data));tmp.chmod(0o600);tmp.replace(path)
+
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--state',default=str(pathlib.Path.home()/'.paper-companion'));parser.add_argument('--port',type=int,default=8891);args=parser.parse_args()
- os.umask(0o077);bridge=Bridge(args.state)
- connection=bridge.root/'connection.json';connection.write_text(json.dumps({'serviceURL':f'http://127.0.0.1:{args.port}','token':bridge.token}));connection.chmod(0o600)
- print('Import this local connection file in Zotero:',connection,flush=True)
+ parser=argparse.ArgumentParser();parser.add_argument('--state',default=str(pathlib.Path.home()/'.paper-companion'));parser.add_argument('--port',type=int,default=8891);parser.add_argument('--instance');parser.add_argument('--model-url');parser.add_argument('--ready-file',type=pathlib.Path);args=parser.parse_args()
+ if bool(args.instance)!=bool(args.model_url) or args.instance and not args.ready_file:parser.error('Managed mode needs instance, model URL and ready file')
+ os.umask(0o077);bridge=Bridge(args.state,instance=args.instance,model_url=args.model_url,components={'engine':True,'assets':True,'model':True} if args.instance else None)
+ # Bind first: a busy port must never publish a plausible connection file.
  server=ThreadingHTTPServer(('127.0.0.1',args.port),handler(bridge));server.daemon_threads=True
+ connection=args.ready_file if args.instance else bridge.root/'connection.json'
+ data={'serviceURL':f'http://127.0.0.1:{server.server_port}','token':bridge.token}
+ if args.instance:data.update(modelURL=args.model_url,instance=args.instance,protocol=2,managed=True)
+ atomic_connection(connection,data)
+ if not args.instance:print('Import this local connection file in Zotero:',connection,flush=True)
+ def stop(*_):
+  # shutdown() must run outside the serve_forever thread.
+  threading.Thread(target=server.shutdown,daemon=True).start()
+ for signum in (signal.SIGINT,signal.SIGTERM):signal.signal(signum,stop)
  try:server.serve_forever()
- finally:server.server_close();bridge.pool.shutdown(wait=False,cancel_futures=True)
+ finally:
+  server.server_close();bridge.pool.shutdown(wait=False,cancel_futures=True)
+  try:
+   if json.loads(connection.read_text()).get('serviceURL')==data['serviceURL']:connection.unlink()
+  except (OSError,ValueError):pass
 if __name__=='__main__':main()

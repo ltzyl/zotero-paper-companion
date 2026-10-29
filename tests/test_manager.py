@@ -216,6 +216,31 @@ class ManagerTests(unittest.TestCase):
         started=time.monotonic()
         with patch.object(m,'probe_package_source',side_effect=stalled):self.assertEqual(m.select_package_index(timeout=.08),'https://pypi.org/simple')
         self.assertLess(time.monotonic()-started,.4)
+    def test_package_probe_cleanup_handles_concurrent_connection_close(self):
+        observed=threading.Event();closed=threading.Event();shutdowns=[]
+        class Sock:
+            def shutdown(self,how):shutdowns.append(how)
+        class Connection:
+            def __init__(self):self.current=Sock();self.first=True
+            @property
+            def sock(self):
+                snapshot=self.current
+                if self.first:
+                    self.first=False;observed.set()
+                    if not closed.wait(.5):raise AssertionError('concurrent close did not run')
+                return snapshot
+            def close(self):self.current=None;closed.set()
+        connection=Connection()
+        def concurrent_close():
+            if observed.wait(.5):connection.close()
+        closer=threading.Thread(target=concurrent_close);closer.start()
+        def probe(source,deadline,stop,register):
+            if source['index']=='https://pypi.org/simple':register(connection);return 100
+            return None
+        try:
+            with patch.object(m,'probe_package_source',side_effect=probe):self.assertEqual(m.select_package_index(timeout=.5),'https://pypi.org/simple')
+        finally:closer.join(timeout=1)
+        self.assertEqual(shutdowns,[m.socket.SHUT_RDWR]);self.assertFalse(closer.is_alive())
     def test_package_probe_caps_bytes_and_checks_deadline_between_partial_reads(self):
         self.assertTrue(hasattr(m,'probe_package_source'),'bounded HTTPS source probe is required')
         class Sock:

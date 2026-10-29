@@ -360,8 +360,9 @@ def select_package_index(check=lambda:None, timeout=4):
         # can outlive a socket timeout; daemon workers check stop before sending.
         with lock:
             for connection in connections:
-                if connection.sock is not None:
-                    with contextlib.suppress(OSError): connection.sock.shutdown(socket.SHUT_RDWR)
+                sock=connection.sock
+                if sock is not None:
+                    with contextlib.suppress(OSError): sock.shutdown(socket.SHUT_RDWR)
                 connection.close()
     check()
     return choose_package_index(scores)

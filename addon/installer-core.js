@@ -17,6 +17,7 @@ var PaperInstallerCore=(()=>{
   if(!seen.has(uv.executable))throw new Error('安装器压缩包缺少程序');return true;
  }
  function loopback(value){if(typeof value!=='string'||!/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/.test(value))return false;const port=Number(value.slice(value.lastIndexOf(':')+1));return port<=65535;}
+ function validateDownloadProxy(value){if(typeof value!=='string')throw new Error('下载代理地址无效');value=value.trim();if(value&&!loopback(value))throw new Error('下载代理请填写 http://127.0.0.1:端口，或留空');return value;}
  function validateConnection(c){if(!c||c.managed!==true||c.protocol!==2||!loopback(c.serviceURL)||!loopback(c.modelURL)||typeof c.token!=='string'||!/^[a-zA-Z0-9_-]{32,256}$/.test(c.token)||!/^[a-f0-9]{48}$/.test(c.instance))throw new Error('本机服务连接信息无效');return c;}
  function validateReady(c,h){validateConnection(c);if(!h||h.status!=='ok'||h.service!=='paper-companion'||h.protocol!==2||h.instance!==c.instance||h.modelURL!==c.modelURL||h.ready!==true||!['engine','model','assets'].every(k=>h.components?.[k]===true))throw new Error('本机服务身份或组件检查尚未通过');return true;}
  function managedRoot(home,digest){if(typeof home!=='string'||!home.startsWith('/')||home==='/'||home.split('/').some(x=>x==='..'||x==='.')||!/^[a-f0-9]{32,64}$/.test(digest))throw new Error('安装目录无效');return home.replace(/\/$/,'')+'/.paper-companion/managed-'+digest.slice(0,24);}
@@ -53,5 +54,5 @@ var PaperInstallerCore=(()=>{
   async cancel(){const session=this.session;if(!session||session.activating)return;session.cancelled=true;await this.native.cancel(session);}
   async stop(){await this.cancel();await this.busy?.catch(()=>{});if(this.runtime){this.runtime.cancelled=true;await this.native.cancel(this.runtime);this.runtime=null;}}
  }
- return {SERVICE_FILES,relative,validateManifest,validateArchive,validateConnection,validateReady,managedRoot,validatePlatform,Controller};
+ return {SERVICE_FILES,relative,validateDownloadProxy,validateManifest,validateArchive,validateConnection,validateReady,managedRoot,validatePlatform,Controller};
 })();

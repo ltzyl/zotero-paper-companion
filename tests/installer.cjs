@@ -167,3 +167,11 @@ test('unsupported Windows platform reports clearly before deriving a managed hom
  vm.runInNewContext(fs.readFileSync(nativeFile,'utf8'),context);context.PaperInstallerNative.prototype.readResource=async name=>name==='runtime-manifest.json'?JSON.stringify(manifest):'fixture';
  await context.PaperInstaller.initialize({win:{URL}},'jar:file:///fixture.xpi!/');assert.equal(context.PaperInstaller.status.state,'unsupported');assert.match(context.PaperInstaller.status.detail,/macOS 14/);assert.equal(await context.PaperInstaller.openLog(),false);
 });
+
+test('download proxy accepts only explicit loopback HTTP without credentials',()=>{
+ assert.equal(core.validateDownloadProxy(''), '');assert.equal(core.validateDownloadProxy(' http://127.0.0.1:7897 '),'http://127.0.0.1:7897');
+ for(const value of ['http://example.com:80','http://localhost:7897','http://user:pass@127.0.0.1:7897','http://127.0.0.1:7897/path','http://127.0.0.1:7897?x=1','http://127.0.0.1:65536','socks5://127.0.0.1:7897',null])assert.throws(()=>core.validateDownloadProxy(value));
+});
+test('native manager arguments include the chosen proxy as a separate argument',()=>{
+ const f=nativeFixture();try{f.owner.config={downloadProxy:'http://127.0.0.1:7897'};const args=f.n.args('install');assert.deepEqual(Array.from(args.slice(-3)),['--download-proxy','http://127.0.0.1:7897','install']);f.owner.config.downloadProxy='';assert.equal(f.n.args('run').includes('--download-proxy'),false);}finally{f.cleanup();}
+});

@@ -106,7 +106,7 @@ var PaperInstallerNative=class{
  async installed(){
   try{const pointer=JSON.parse(await IOUtils.readUTF8(this.path('current.json')));if(!/^[a-f0-9]{24}$/.test(pointer.version))return false;const ready=JSON.parse(await IOUtils.readUTF8(this.path('staging',pointer.version,'validated.json')));return ready.version===pointer.version&&ready.fingerprint===this.owner.version&&ready.modelDigest===this.manifest.model.digest&&ready.python===this.manifest.python.version&&await IOUtils.exists(this.owner.python);}catch(_){return false;}
  }
- args(command){return [PathUtils.join(this.owner.resources,'manager.py'),'--root',this.root,'--uv',this.owner.uv,'--resources',this.owner.resources,'--parent-pid',String(Services.appinfo.processID),command];}
+ args(command){const proxy=this.core.validateDownloadProxy(this.owner.config?.downloadProxy||'');return [PathUtils.join(this.owner.resources,'manager.py'),'--root',this.root,'--uv',this.owner.uv,'--resources',this.owner.resources,'--parent-pid',String(Services.appinfo.processID),...(proxy?['--download-proxy',proxy]:[]),command];}
  async progress(session,emit){
   try{session.check();const info=JSON.parse(await IOUtils.readUTF8(this.path('progress.json')));if(['engine','assets','ollama','model','validate'].includes(info.phase)&&info.status==='running'){
    const labels={engine:'安装翻译组件（自动选择下载源）',assets:'下载 PDF 字体和版面识别资源',ollama:'安装本地模型运行组件',model:'下载本地总结模型',validate:'检查翻译组件和本地总结模型'};
@@ -117,7 +117,7 @@ var PaperInstallerNative=class{
   if(await this.installed())return;
   emit({phase:'engine',state:'running',detail:'安装翻译组件'});const child=await this.spawn(session,this.owner.python,this.args('install'),{cwd:this.root});const deadline=Date.now()+7200000;
   while(child.exit===null){session.check();if(Date.now()>deadline){await child.process.kill(1000);throw new Error('自动设置超时，请重试');}await this.progress(session,emit);await this.delay(600);}
-  await child.done;session.check();if(child.exit!==0){let detail='翻译组件或模型安装未完成，请重试';try{const p=JSON.parse(await IOUtils.readUTF8(this.path('progress.json')));if(p.status==='failed'&&/Insufficient free disk/.test(p.detail))detail='磁盘空间不足，请至少保留 12 GiB 可用空间后重试';}catch(_){}throw new Error(detail);}
+  await child.done;session.check();if(child.exit!==0){let detail='翻译组件或模型安装未完成，请重试';try{const p=JSON.parse(await IOUtils.readUTF8(this.path('progress.json')));if(p.status==='failed'&&/Insufficient free disk/.test(p.detail))detail='磁盘空间不足，请至少保留 12 GiB 可用空间后重试';else if(p.detail==='DOWNLOAD_PROXY_REQUIRED')detail='当前网络使用了代理虚拟 IP，请展开高级设置，填写本机 HTTP 代理后重试';}catch(_){}throw new Error(detail);}
   if(!await this.installed())throw new Error('本机组件验证尚未完成，请重试');
  }
  delay(ms){return new Promise(resolve=>this.win.setTimeout(resolve,ms));}
@@ -164,7 +164,7 @@ var PaperInstaller={
  subscribe(listener){return this.controller.subscribe(listener);},
  open(){if(!this.chromeHandle){const startup=Components.classes['@mozilla.org/addons/addon-manager-startup;1'].getService(Components.interfaces.amIAddonManagerStartup);this.chromeHandle=startup.registerChrome(Services.io.newURI(this.rootURI+'manifest.json'),[['content','paper-companion',this.rootURI]]);}if(this.window&&!this.window.closed){this.window.focus();return this.window;}this.window=this.win.openDialog('chrome://paper-companion/content/setup.xhtml','paper-companion-setup','chrome,centerscreen,resizable,width=640,height=690',{installer:this});return this.window;},
  async openLog(){if(!this.root)return false;const path=PathUtils.join(this.root,'runtime.log');await this.native.safeFile(path);if(!await IOUtils.exists(path))return false;await Zotero.File.reveal(path);return true;},
- start(options){return this.controller.start(options);},
+ start(options={}){if(this.controller.busy)return this.controller.busy;try{const proxy=this.core.validateDownloadProxy(options.downloadProxy??this.config.downloadProxy??'');this.config.downloadProxy=proxy;Zotero.Prefs.set('paperCompanion.downloadProxy',proxy);return this.controller.start(options);}catch(error){this.controller.update({phase:'error',state:'failed',detail:error.message});throw error;}},
  ensureRunning(){return this.controller.ensureRunning();},
  cancel(){return this.controller.cancel();},
  async stop(){await this.controller?.stop();this.window?.close();this.chromeHandle?.destruct();this.chromeHandle=null;}

@@ -41,7 +41,7 @@
    <button id="cancel" hidden="hidden">取消设置</button>
    <button id="close">关闭</button>
   </div>
-  <details id="advanced"><summary>高级设置</summary><p>已经自行运行兼容的本机服务时，可以导入连接文件。</p><button id="manual">连接已有服务…</button> <button id="logs">打开日志所在文件夹</button></details>
+  <details id="advanced"><summary>高级设置</summary><label class="proxy-label" for="download-proxy">模型下载代理（可选）</label><input id="download-proxy" class="proxy-input" type="url" placeholder="http://127.0.0.1:7897" autocomplete="off"/><p>遇到代理虚拟 IP 提示时，填写代理软件提供的本机 HTTP 地址。留空使用当前网络。</p><p>已经自行运行兼容的本机服务时，可以导入连接文件。</p><button id="manual">连接已有服务…</button> <button id="logs">打开日志所在文件夹</button></details>
  </main>
 </body>
 </html>

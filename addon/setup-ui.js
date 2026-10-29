@@ -9,15 +9,15 @@ window.addEventListener('DOMContentLoaded',()=>{
   state=status;busy=status.state==='running';const ready=status.phase==='ready';
   $('phase').textContent=labels[status.phase]||'自动设置';$('detail').textContent=status.detail||'点击开始后，将先检查 Mac 和可用磁盘空间。';
   $('start').hidden=busy||ready;$('start').disabled=!$('consent').checked||status.state==='unsupported';$('start').textContent=['failed','cancelled'].includes(status.state)?'重试自动设置':'开始自动设置';
-  $('cancel').hidden=!busy;$('cancel').disabled=status.cancellable===false;$('consent').disabled=busy||ready;$('metrics').disabled=busy||ready;$('manual').disabled=busy;$('close').textContent=ready?'完成':'关闭';
+  $('cancel').hidden=!busy;$('cancel').disabled=status.cancellable===false;$('consent').disabled=busy||ready;$('metrics').disabled=busy||ready;$('manual').disabled=busy;$('download-proxy').disabled=busy||ready;if(status.state==='failed'&&status.detail?.includes('本机 HTTP'))$('advanced').open=true;$('close').textContent=ready?'完成':'关闭';
   $('consent-panel').hidden=ready;$('progress').hidden=!busy;
   if(Number.isFinite(status.total)&&status.total>0&&Number.isFinite(status.completed)){$('progress').max=status.total;$('progress').value=Math.min(status.completed,status.total);}else $('progress').removeAttribute('value');
   $('bytes').textContent=Number.isFinite(status.completed)?'当前文件已下载 '+format(status.completed)+(Number.isFinite(status.total)?' / '+format(status.total):''):'';
   const current=order[status.phase];for(const step of document.querySelectorAll('#steps li')){const n=order[step.dataset.phase];step.className=current===undefined?'':n<current?'done':n===current?'current':'';if(n===current)step.setAttribute('aria-current','step');else step.removeAttribute('aria-current');}
  }
- $('metrics').checked=!!installer.config.metricsEnabled;
+ $('metrics').checked=!!installer.config.metricsEnabled;$('download-proxy').value=installer.config.downloadProxy||'';
  $('consent').addEventListener('change',()=>render(state));
- $('start').addEventListener('click',async()=>{if(!$('consent').checked||busy)return;try{await installer.start({metrics:$('metrics').checked});}catch(_){/* The installer publishes a safe error and retains retry state. */}});
+ $('start').addEventListener('click',async()=>{if(!$('consent').checked||busy)return;try{await installer.start({metrics:$('metrics').checked,downloadProxy:$('download-proxy').value});}catch(_){/* The installer publishes a safe error and retains retry state. */}});
  $('cancel').addEventListener('click',async()=>{const button=$('cancel');button.disabled=true;try{await installer.cancel();}finally{button.disabled=false;}});
  $('close').addEventListener('click',()=>window.close());
  $('manual').addEventListener('click',async()=>{try{await installer.config.setupManual();}catch(error){$('detail').textContent=String(error.message||'无法读取本机连接文件');}});

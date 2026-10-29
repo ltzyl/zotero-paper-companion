@@ -1,0 +1,19 @@
+{
+  "addons": {
+    "paper-companion@ltzyl.github.io": {
+      "updates": [
+        {
+          "version": "0.1.0",
+          "update_link": "https://github.com/ltzyl/zotero-paper-companion/releases/download/v0.1.0/paper-companion-0.1.0.xpi",
+          "update_hash": "sha256:bf3ee21e92ccc58a6291539d1426a9908cd8ef63aad211c9baf9225ceb4efdc7",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.*"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

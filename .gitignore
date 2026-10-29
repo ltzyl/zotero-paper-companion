@@ -1,0 +1,12 @@
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+connection.json
+token
+*.log
+*.sqlite*
+*.db
+.DS_Store

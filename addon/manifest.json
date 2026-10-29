@@ -1,0 +1,15 @@
+{
+  "manifest_version": 2,
+  "name": "Paper Companion · 论文助手",
+  "version": "0.1.0",
+  "description": "自动补全文献、独立中英阅读、本地总结、中文摘要、简记及文库内引用图。需要本机运行组件。",
+  "author": "Paper Companion contributors",
+  "applications": {
+    "zotero": {
+      "id": "paper-companion@ltzyl.github.io",
+      "update_url": "https://raw.githubusercontent.com/ltzyl/zotero-paper-companion/main/updates.json",
+      "strict_min_version": "10.0",
+      "strict_max_version": "10.*"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "nodes": [
+    {
+      "key": "DEMO0001",
+      "title": "Imaginary Study A: Rain Gardens in a Toy City",
+      "titleZh": "虚构研究 A：玩具城市中的雨水花园",
+      "doi": "",
+      "collections": [
+        "虚构分类：城市研究"
+      ],
+      "focus": true
+    },
+    {
+      "key": "DEMO0002",
+      "title": "Imaginary Study B: A Synthetic Water Balance Model",
+      "titleZh": "虚构研究 B：合成水量平衡模型",
+      "doi": "",
+      "collections": [
+        "虚构分类：模型方法"
+      ],
+      "focus": true
+    },
+    {
+      "key": "DEMO0003",
+      "title": "Imaginary Study C: Testing an Invented Neighborhood",
+      "titleZh": "虚构研究 C：虚拟街区测试",
+      "doi": "",
+      "collections": [
+        "虚构分类：城市研究"
+      ],
+      "focus": true
+    }
+  ],
+  "edges": [
+    {
+      "source": "DEMO0001",
+      "target": "DEMO0002",
+      "evidence": "演示连线：人为构造，不是真实引用"
+    },
+    {
+      "source": "DEMO0003",
+      "target": "DEMO0001",
+      "evidence": "演示连线：人为构造，不是真实引用"
+    }
+  ],
+  "updated": "虚构演示，无真实文献",
+  "coverage": {
+    "DEMO0001": "parsed",
+    "DEMO0002": "parsed",
+    "DEMO0003": "parsed"
+  }
+}

@@ -200,6 +200,30 @@ class ManagerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'extraction failure'):manager.install()
         self.assertEqual(manager.current(),versions/manager.version);self.assertEqual(runner.read_bytes(),b'known working')
         self.assertFalse((old/'installing.json').exists(),'a published generation must never be reopened for writes')
+    def run_install_model_smoke(self, response):
+        manager=self.make_manager();manager.manifest['resources']=[]
+        def command(args,**kwargs):
+            if 'sync' in args:
+                python=pathlib.Path(args[args.index('--python')+1]);site=python.parent.parent/'lib/python3.12/site-packages'
+                (site/'pdf2zh_next/translator/translator_impl').mkdir(parents=True,exist_ok=True)
+        def extract(archive,target):target.mkdir(parents=True,exist_ok=True);(target/manager.manifest['ollama']['executable']).write_bytes(b'fictional runner')
+        from contextlib import ExitStack
+        with ExitStack() as stack:
+            for obj,name,kwargs in [(m.platform,'python_version',{'return_value':manager.manifest['python']['version']}),(m.platform,'system',{'return_value':'Darwin'}),(m.platform,'machine',{'return_value':'arm64'}),(m.platform,'mac_ver',{'return_value':('14.0',(),'')}),(m.shutil,'disk_usage',{'return_value':__import__('collections').namedtuple('Usage','total used free')(100,0,10**15)}),(manager,'command',{'side_effect':command}),(manager,'start_ollama',{'return_value':('http://127.0.0.1:50100',object())}),(manager,'validate_model',{}),(m,'apply_path_patches',{}),(m,'download',{}),(m,'safe_extract',{'side_effect':extract}),(m,'select_package_index',{'return_value':'https://pypi.org/simple'})]:stack.enter_context(patch.object(obj,name,**kwargs))
+            opener=__import__('unittest.mock',fromlist=['Mock']).Mock();opener.open.return_value=io.BytesIO(b'{"status":"success"}\n')
+            stack.enter_context(patch.object(m.urllib.request,'build_opener',return_value=opener))
+            request=stack.enter_context(patch.object(m,'request_json',return_value=response))
+            error=None
+            try:manager.install()
+            except RuntimeError as failure:error=failure
+            return manager,request.call_args,error
+    def test_install_model_smoke_explicitly_disables_thinking(self):
+        manager,call,error=self.run_install_model_smoke({'response':'ready'})
+        self.assertIsNone(error);self.assertEqual(call.args[0],'http://127.0.0.1:50100/api/generate');self.assertIs(call.args[1].get('think'),False);self.assertEqual(call.args[1]['options']['num_predict'],32)
+        self.assertTrue((manager.root/'current.json').exists())
+    def test_install_model_smoke_still_rejects_empty_generated_response(self):
+        manager,call,error=self.run_install_model_smoke({'response':'   '})
+        self.assertIsInstance(error,RuntimeError);self.assertIn('no test response',str(error));self.assertFalse((manager.root/'current.json').exists())
     def test_package_index_prefers_pypi_unless_mirror_is_clearly_faster(self):
         self.assertTrue(hasattr(m,'choose_package_index'),'automatic package index selection is required')
         pypi='https://pypi.org/simple';tuna='https://pypi.tuna.tsinghua.edu.cn/simple'

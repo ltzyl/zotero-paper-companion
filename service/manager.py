@@ -467,7 +467,7 @@ class Manager:
         self.validate_model(model_url)
         self.progress.write('validate','running','Checking a fictional PDF and local summary')
         self.command([python,service/'engine_probe.py','--smoke'],timeout=1800)
-        result=request_json(model_url+'/api/generate',{'model':self.manifest['model']['name'],'prompt':'/no_think\nReply with the single word ready.','stream':False,'options':{'num_predict':32}},timeout=180)
+        result=request_json(model_url+'/api/generate',{'model':self.manifest['model']['name'],'prompt':'/no_think\nReply with the single word ready.','think':False,'stream':False,'options':{'num_predict':32}},timeout=180)
         if not result.get('response','').strip(): raise RuntimeError('Local model returned no test response')
         self.children.close()
         atomic_json(stage/'validated.json',{'version':generation,'fingerprint':self.version,'modelDigest':self.manifest['model']['digest'],'python':self.manifest['python']['version']})

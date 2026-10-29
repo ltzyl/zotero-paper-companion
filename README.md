@@ -2,7 +2,16 @@
 
 为 Zotero 提供中文阅读、可编辑总结和文库内引用关系图。
 
-![阅读面板与引用关系图示意](docs/demo.svg)
+![Zotero 中的中文标题和引用关系图](docs/zotero-library.png)
+
+<details>
+<summary>查看总结悬浮预览</summary>
+
+![Zotero 总结预览](docs/zotero-summary.png)
+
+</details>
+
+截图使用示例文献。
 
 ## 功能
 
@@ -18,11 +27,11 @@
 
 ## 安装
 
-环境要求：macOS、Zotero 10、Python 3.12 或更高版本。生成本地总结还需要 Ollama 和 `qwen3:4b` 模型。
+环境要求：macOS、Zotero 10、Python 3.12（也兼容 3.13，暂不支持 3.14）。生成本地总结还需要 Ollama 和 `qwen3:4b` 模型。
 
 1. 从 [Releases](https://github.com/ltzyl/zotero-paper-companion/releases) 下载同一版本的 `.xpi` 和 `paper-companion-runtime-*.zip`。
 2. 在 Zotero「工具 → 插件」中安装 `.xpi`。
-3. 安装 [Python](https://www.python.org/downloads/) 和 [Ollama](https://ollama.com/download)，然后下载总结模型：
+3. 安装 [Python 3.12](https://www.python.org/downloads/) 和 [Ollama](https://ollama.com/download)，然后下载总结模型：
 
    ```sh
    ollama pull qwen3:4b
@@ -31,12 +40,24 @@
 4. 解压运行组件，在解压后的目录运行：
 
    ```sh
-   python3 service/install.py --start
+   python3.12 service/install.py --start
    ```
 
 5. 在 Zotero「工具 → Paper Companion：首次设置与隐私」中，选择服务启动时显示的 `connection.json` 文件，并按需开启期刊指标。
 
-首次安装需要下载翻译引擎及模型。使用翻译和总结时，请保持本机服务与 Ollama 运行；后续启动命令会由安装程序显示。
+使用 Python 3.13 时，将安装命令中的 `python3.12` 替换为 `python3.13`。
+
+首次安装需要下载翻译引擎及模型。运行安装命令前，请先在终端进入运行组件的解压目录；该目录下应能看到 `service` 文件夹。
+
+以后使用时，先打开 Ollama，再在终端启动翻译服务：
+
+```sh
+"$HOME/.paper-companion/venv/bin/python" "$HOME/.paper-companion/server.py"
+```
+
+保持该终端窗口打开。完成首次连接设置后，新增论文会进入自动处理队列。
+
+安装只需要 `.xpi` 和运行组件 `.zip`。`SHA256SUMS` 是可选的文件完整性校验清单；`updates.json` 由 Zotero 用于检查更新，无需手动安装。
 
 ## 使用
 

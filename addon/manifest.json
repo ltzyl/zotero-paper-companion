@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Paper Companion · 论文助手",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "自动补全文献、独立中英阅读、本地总结、中文摘要、简记及文库内引用图。需要本机运行组件。",
   "author": "Paper Companion contributors",
   "applications": {

@@ -13,7 +13,8 @@ var PaperMetadata = class {
   }
   renderSummary(data,column,doc) {
     const cell=doc.createElement('span');cell.className='cell '+column.className;
-    const item=Zotero.Items.get(Number(data));if(!item?.isRegularItem())return cell;
+    const id=Number(data);if(!Number.isInteger(id)||id<=0)return cell;
+    const item=Zotero.Items.get(id);if(!item?.isRegularItem())return cell;
     const note=this.findNote(item);const first=note?new this.window.DOMParser().parseFromString(note.getNote(),'text/html').querySelector('p')?.textContent?.trim():'';
     cell.textContent=first||(note?'点击查看总结':'生成总结');cell.style.cssText='cursor:pointer;color:#28758b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';cell.tabIndex=0;cell.setAttribute('role','button');
     const hide=()=>{this.preview?.remove();this.preview=null;};

@@ -4,7 +4,7 @@ import argparse,pathlib,subprocess,sys,venv,shutil
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--directory',type=pathlib.Path,default=pathlib.Path.home()/'.paper-companion');p.add_argument('--start',action='store_true');a=p.parse_args()
- if sys.version_info<(3,12):raise SystemExit('Install Python 3.12 or newer first.')
+ if not (3,12)<=sys.version_info[:2]<(3,14):raise SystemExit('Use Python 3.12 or 3.13. The translation engine does not support Python 3.14 yet.')
  root=a.directory.resolve();env=root/'venv';root.mkdir(parents=True,exist_ok=True,mode=0o700)
  venv.EnvBuilder(with_pip=True).create(env);python=env/('Scripts/python.exe' if sys.platform=='win32' else 'bin/python')
  subprocess.run([str(python),'-m','pip','install','pdf2zh-next==2.9.0','babeldoc==0.6.2'],check=True)

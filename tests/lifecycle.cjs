@@ -20,3 +20,8 @@ test('Ollama transport failure is marked retryable',async()=>{
  await assert.rejects(new s.PaperMetadata().request('GET','/api/tags'),e=>e.temporarilyUnavailable===true);
 });
 test('fictional demonstration script parses without user data',()=>{const html=fs.readFileSync(path.join(__dirname,'../examples/demo.html'),'utf8');for(const [,js] of html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new vm.Script(js);assert.ok(!html.includes('zotero://select'));});
+test('attachment rows have an empty summary cell without an item lookup',()=>{
+ const s={Zotero:{Items:{get:()=>{throw new Error('Empty identifier must not be looked up');}}}};
+ vm.runInNewContext(fs.readFileSync(path.join(root,'metadata.js'),'utf8'),s);
+ const cell={};const result=new s.PaperMetadata().renderSummary('',{className:'summary'},{createElement:()=>cell});assert.equal(result,cell);
+});

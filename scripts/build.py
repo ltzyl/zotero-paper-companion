@@ -3,12 +3,15 @@
 import hashlib,json,pathlib,re,zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ADDON='bootstrap.js companions.js core.js enrichment.js journal-data.js manifest.json metadata-core.js metadata.js metrics-core.js metrics-update-core.js metrics-updater.js metrics.js pane-core.js public-config.js reading-pane.js references-core.js workflow.js citation-graph.html'.split()
-SERVICE=['service/server.py','service/install.py','service/bing_compat.py','LICENSE','THIRD_PARTY.md','PRIVACY.md','README.md','docs/ARCHITECTURE.md','docs/demo.svg','examples/demo.html','examples/fictional-library.json']
+SERVICE=['service/server.py','service/install.py','service/bing_compat.py','LICENSE','THIRD_PARTY.md','PRIVACY.md','README.md','docs/ARCHITECTURE.md','docs/zotero-library.png','docs/zotero-summary.png','examples/demo.html','examples/fictional-library.json']
 
 def audit(files):
  for name in files:
   p=ROOT/name
   if not p.is_file() or p.is_symlink():raise ValueError('Missing or linked source: '+name)
+  if p.suffix=='.png':
+   if not p.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('Invalid PNG: '+name)
+   continue
   text=p.read_text()
   for pattern in [r'/Users/[^/\s]+/',r'(?i)[A-Z]:\\Users\\',r'gh[pousr]_[A-Za-z0-9]{20,}',r'github_pat_[A-Za-z0-9_]{20,}',r'sk-[A-Za-z0-9]{24,}']:
    if re.search(pattern,text):raise ValueError('Potential private value in '+name)

@@ -21,6 +21,7 @@ window.addEventListener('DOMContentLoaded',()=>{
  $('cancel').addEventListener('click',async()=>{const button=$('cancel');button.disabled=true;try{await installer.cancel();}finally{button.disabled=false;}});
  $('close').addEventListener('click',()=>window.close());
  $('manual').addEventListener('click',async()=>{try{await installer.config.setupManual();}catch(error){$('detail').textContent=String(error.message||'无法读取本机连接文件');}});
+ $('logs').addEventListener('click',async()=>{try{if(!await installer.openLog())$('detail').textContent='日志将在安装本机组件后生成。';}catch(_){$('detail').textContent='暂时无法打开日志文件夹。';}});
  const unsubscribe=installer.subscribe(render);
  window.addEventListener('unload',()=>{unsubscribe();if(busy)installer.cancel().catch(()=>{});},{once:true});
 },{once:true});

@@ -161,6 +161,7 @@ var PaperInstaller={
  get status(){return this.controller?.status||{phase:'idle',state:'idle',detail:''};},
  subscribe(listener){return this.controller.subscribe(listener);},
  open(){if(!this.chromeHandle){const startup=Components.classes['@mozilla.org/addons/addon-manager-startup;1'].getService(Components.interfaces.amIAddonManagerStartup);this.chromeHandle=startup.registerChrome(Services.io.newURI(this.rootURI+'manifest.json'),[['content','paper-companion',this.rootURI]]);}if(this.window&&!this.window.closed){this.window.focus();return this.window;}this.window=this.win.openDialog('chrome://paper-companion/content/setup.xhtml','paper-companion-setup','chrome,centerscreen,resizable,width=640,height=690',{installer:this});return this.window;},
+ async openLog(){const path=PathUtils.join(this.root,'runtime.log');await this.native.safeFile(path);if(!await IOUtils.exists(path))return false;await Zotero.File.reveal(path);return true;},
  start(options){return this.controller.start(options);},
  ensureRunning(){return this.controller.ensureRunning();},
  cancel(){return this.controller.cancel();},

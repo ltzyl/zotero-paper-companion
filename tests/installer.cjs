@@ -153,3 +153,11 @@ test('activation finishes atomically if the setup window closes during configura
 test('startup stages new bundled manager resources without installing or downloading',async()=>{
  let staged=false;const f=fixture({copyResources:async()=>{staged=true;},connect:async()=>{assert.equal(staged,true);return f.connection;}});await f.controller.ensureRunning();await f.controller.stop();
 });
+
+test('log shortcut reveals only the fixed managed log and rejects a symlink',async()=>{
+ const f=nativeFixture();try{
+  const revealed=[];f.context.Zotero={File:{reveal:async p=>revealed.push(p)}};const installer=f.context.PaperInstaller;installer.root=f.root;installer.native=f.n;
+  assert.equal(await installer.openLog(),false);const target=path.join(f.root,'runtime.log');fs.writeFileSync(target,'fixture');assert.equal(await installer.openLog(),true);assert.deepEqual(revealed,[target]);
+  fs.unlinkSync(target);fs.symlinkSync(path.join(f.tmp,'absent'),target);await assert.rejects(installer.openLog());assert.equal(revealed.length,1);
+ }finally{f.cleanup();}
+});

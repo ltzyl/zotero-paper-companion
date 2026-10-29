@@ -207,7 +207,7 @@ var PaperWorkflow = class {
           const dual = files.find(f => WorkflowCore.isChinese(typeof f === 'string' ? f : f.fileName));
           if (!dual) {this.jobs[id].retryFresh=true;throw new Error('翻译任务未返回独立中文 PDF，请重试生成中文译文');}
           const filename = typeof dual === 'string' ? dual : dual.fileName;
-          const response = await Zotero.HTTP.request('GET', PublicConfig.serviceURL + '/translatedFile/' + encodeURIComponent(filename), {responseType:'arraybuffer',timeout:60000,headers:PublicConfig.headers()});
+          const response = await Zotero.HTTP.request('GET', PublicConfig.serviceURL + '/translatedFile/' + encodeURIComponent(filename), {followRedirects:false,anon:true,noCache:true,errorDelayMax:0,responseType:'arraybuffer',timeout:60000,headers:PublicConfig.headers()});
           const bytes = new Uint8Array(response.response);
           if (String.fromCharCode(...bytes.slice(0,5)) !== '%PDF-') throw new Error('返回文件不是 PDF');
           const path = PathUtils.join(this.root, item.key + '-zh.pdf');

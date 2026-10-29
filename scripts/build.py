@@ -2,7 +2,8 @@
 """Deterministic, allowlisted archives; never package a local Zotero profile."""
 import hashlib,json,pathlib,re,zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-ADDON='bootstrap.js companions.js core.js enrichment.js journal-data.js manifest.json metadata-core.js metadata.js metrics-core.js metrics-update-core.js metrics-updater.js metrics.js pane-core.js public-config.js reading-pane.js references-core.js workflow.js citation-graph.html'.split()
+ADDON='bootstrap.js companions.js core.js enrichment.js journal-data.js manifest.json metadata-core.js metadata.js metrics-core.js metrics-update-core.js metrics-updater.js metrics.js pane-core.js public-config.js reading-pane.js references-core.js workflow.js citation-graph.html installer.js installer-core.js setup.xhtml setup-ui.js setup.css'.split()
+RUNTIME=['service/'+n for n in 'manager.py server.py engine_probe.py bing_compat.py runtime-manifest.json python-downloads.json engine-requirements.lock engine-requirements.in'.split()]
 SERVICE=['service/server.py','service/install.py','service/bing_compat.py','LICENSE','THIRD_PARTY.md','PRIVACY.md','README.md','docs/ARCHITECTURE.md','docs/zotero-library.png','docs/zotero-summary.png','examples/demo.html','examples/fictional-library.json']
 
 def audit(files):
@@ -24,9 +25,9 @@ def archive(dest,files,prefix=''):
 
 def main():
  manifest=json.loads((ROOT/'addon/manifest.json').read_text());version=manifest['version'];dest=ROOT/'dist';dest.mkdir(exist_ok=True)
- files=['addon/'+n for n in ADDON]+SERVICE;audit(files)
+ files=['addon/'+n for n in ADDON]+RUNTIME+SERVICE;audit(files)
  xpi=dest/f'paper-companion-{version}.xpi';runtime=dest/f'paper-companion-runtime-{version}.zip'
- archive(xpi,['addon/'+n for n in ADDON],prefix='addon/');archive(runtime,SERVICE)
+ archive(xpi,['addon/'+n for n in ADDON]+RUNTIME+['LICENSE','THIRD_PARTY.md'],prefix='addon/');archive(runtime,SERVICE)
  digest=hashlib.sha256(xpi.read_bytes()).hexdigest()
  updates={'addons':{manifest['applications']['zotero']['id']:{'updates':[{'version':version,'update_link':f'https://github.com/ltzyl/zotero-paper-companion/releases/download/v{version}/{xpi.name}','update_hash':'sha256:'+digest,'applications':{'zotero':{'strict_min_version':'10.0','strict_max_version':'10.*'}}}]}}}
  (ROOT/'updates.json').write_text(json.dumps(updates,indent=2)+'\n');(dest/'updates.json').write_bytes((ROOT/'updates.json').read_bytes())

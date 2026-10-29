@@ -3,8 +3,8 @@ var workflow,config,scope,starting;
 async function startup({rootURI,resourceURI}){
  await Zotero.initializationPromise;await Zotero.uiReadyPromise;
  scope={Zotero,Services,IOUtils,PathUtils,Components,ChromeUtils};const root=rootURI||resourceURI.spec;
- for(const file of ['core','metadata-core','pane-core','public-config','metadata','journal-data','metrics-core','metrics-update-core','metrics-updater','metrics','references-core','companions','reading-pane','enrichment','workflow'])Services.scriptloader.loadSubScript(root+file+'.js',scope);
- config=scope.PublicConfig;await config.initialize(root);
+ for(const file of ['core','metadata-core','pane-core','public-config','installer','metadata','journal-data','metrics-core','metrics-update-core','metrics-updater','metrics','references-core','companions','reading-pane','enrichment','workflow'])Services.scriptloader.loadSubScript(root+file+'.js',scope);
+ config=scope.PublicConfig;await config.initialize(root);await scope.PaperInstaller.initialize(config,root);
  // A new install makes no external translation/data request before first-run consent.
  config.onConfigured=async()=>{if(starting)return starting;if(workflow){
   const enabled=!!Zotero.Prefs.get('paperCompanion.metricsEnabled');
@@ -19,8 +19,11 @@ async function startup({rootURI,resourceURI}){
   workflow.readingPane=new scope.PaperReadingPane();await workflow.readingPane.start(workflow);
   workflow.enrichment=new scope.PaperEnrichment();await workflow.enrichment.start(workflow);
  })();try{await starting;}catch(e){await workflow?.stop();workflow=null;throw e;}finally{starting=null;}};
- if(config.enabled)await config.onConfigured();
+ if(config.enabled){
+  if(config.managed){try{const connection=await scope.PaperInstaller.ensureRunning();await config.activateConnection(connection,{managed:true,metrics:!!Zotero.Prefs.get('paperCompanion.metricsEnabled')});}catch(e){Zotero.logError(e);}}
+  await config.onConfigured();
+ }
 }
-async function shutdown(){await starting;await workflow?.stop();config?.stop();workflow=null;}
+async function shutdown(){await scope?.PaperInstaller?.stop();await starting;await workflow?.stop();config?.stop();workflow=null;}
 function install(){}
 function uninstall(){}

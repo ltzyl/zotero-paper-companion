@@ -36,7 +36,7 @@ var PaperMetadata = class {
   }
   async ensureServer() {} // Ollama is a separate local service; never launch user-specific scripts.
   async request(method,path,data,timeout=240000) {
-    let r;try{r=await Zotero.HTTP.request(method,'http://127.0.0.1:11434'+path,{responseType:'json',timeout,
+    let r;try{r=await Zotero.HTTP.request(method,PublicConfig.localURL(PublicConfig.modelURL||'http://127.0.0.1:11434')+path,{followRedirects:false,anon:true,noCache:true,errorDelayMax:0,responseType:'json',timeout,
       ...(data?{body:JSON.stringify(data),headers:{'Content-Type':'application/json'}}:{})});
     }catch(e){e.temporarilyUnavailable=true;throw e;}
     return r.response;

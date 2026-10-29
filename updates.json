@@ -5,7 +5,7 @@
         {
           "version": "0.2.0",
           "update_link": "https://github.com/ltzyl/zotero-paper-companion/releases/download/v0.2.0/paper-companion-0.2.0.xpi",
-          "update_hash": "sha256:489ff45a46cfcfdb5904bf051ec454803a463c6e09697b7148b8fe042c2ea688",
+          "update_hash": "sha256:c604ea058bdfa233f1d8ffec707b91aeb9fb855e5c9f789e4604783c42bdd008",
           "applications": {
             "zotero": {
               "strict_min_version": "10.0",

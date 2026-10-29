@@ -8,7 +8,7 @@ window.addEventListener('DOMContentLoaded',()=>{
  function render(status){
   state=status;busy=status.state==='running';const ready=status.phase==='ready';
   $('phase').textContent=labels[status.phase]||'自动设置';$('detail').textContent=status.detail||'点击开始后，将先检查 Mac 和可用磁盘空间。';
-  $('start').hidden=busy||ready;$('start').disabled=!$('consent').checked;$('start').textContent=['failed','cancelled'].includes(status.state)?'重试自动设置':'开始自动设置';
+  $('start').hidden=busy||ready;$('start').disabled=!$('consent').checked||status.state==='unsupported';$('start').textContent=['failed','cancelled'].includes(status.state)?'重试自动设置':'开始自动设置';
   $('cancel').hidden=!busy;$('cancel').disabled=status.cancellable===false;$('consent').disabled=busy||ready;$('metrics').disabled=busy||ready;$('manual').disabled=busy;$('close').textContent=ready?'完成':'关闭';
   $('consent-panel').hidden=ready;$('progress').hidden=!busy;
   if(Number.isFinite(status.total)&&status.total>0&&Number.isFinite(status.completed)){$('progress').max=status.total;$('progress').value=Math.min(status.completed,status.total);}else $('progress').removeAttribute('value');

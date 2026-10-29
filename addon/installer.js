@@ -151,7 +151,9 @@ var PaperInstaller={
   this.config=config;this.rootURI=rootURI;this.win=config.win||Zotero.getMainWindow();
   const scope={URL:this.win.URL};Services.scriptloader.loadSubScript(rootURI+'installer-core.js',scope);this.core=scope.PaperInstallerCore;
   this.native=new PaperInstallerNative(this);this.sources={};for(const name of this.core.SERVICE_FILES)this.sources[name]=await this.native.readResource(name);
-  this.manifest=this.core.validateManifest(JSON.parse(this.sources['runtime-manifest.json']));const encode=text=>new this.win.TextEncoder().encode(text);
+  this.manifest=this.core.validateManifest(JSON.parse(this.sources['runtime-manifest.json']));
+  if(Services.appinfo?.OS&&Services.appinfo.OS!=='Darwin'){this.root='';this.controller=new this.core.Controller(this.native,config,this.root,this.manifest);this.controller.update({phase:'error',state:'unsupported',detail:'自动设置暂仅支持 macOS 14 或更新版本及 Apple 芯片 Mac。'});return;}
+  const encode=text=>new this.win.TextEncoder().encode(text);
   const profileHash=await this.native.digest(encode(Zotero.Profile.dir));this.root=this.core.managedRoot(Services.dirsvc.get('Home',Components.interfaces.nsIFile).path,profileHash);
   const fingerprint=await this.native.digest(encode(this.core.SERVICE_FILES.map(name=>this.sources[name]).join('')));this.resources=PathUtils.join(this.root,'resources',fingerprint.slice(0,24));
   this.version=(await this.native.digest(encode(['runtime-manifest.json','engine-requirements.lock','server.py','bing_compat.py','engine_probe.py'].map(name=>this.sources[name]).join('')))).slice(0,24);
@@ -161,7 +163,7 @@ var PaperInstaller={
  get status(){return this.controller?.status||{phase:'idle',state:'idle',detail:''};},
  subscribe(listener){return this.controller.subscribe(listener);},
  open(){if(!this.chromeHandle){const startup=Components.classes['@mozilla.org/addons/addon-manager-startup;1'].getService(Components.interfaces.amIAddonManagerStartup);this.chromeHandle=startup.registerChrome(Services.io.newURI(this.rootURI+'manifest.json'),[['content','paper-companion',this.rootURI]]);}if(this.window&&!this.window.closed){this.window.focus();return this.window;}this.window=this.win.openDialog('chrome://paper-companion/content/setup.xhtml','paper-companion-setup','chrome,centerscreen,resizable,width=640,height=690',{installer:this});return this.window;},
- async openLog(){const path=PathUtils.join(this.root,'runtime.log');await this.native.safeFile(path);if(!await IOUtils.exists(path))return false;await Zotero.File.reveal(path);return true;},
+ async openLog(){if(!this.root)return false;const path=PathUtils.join(this.root,'runtime.log');await this.native.safeFile(path);if(!await IOUtils.exists(path))return false;await Zotero.File.reveal(path);return true;},
  start(options){return this.controller.start(options);},
  ensureRunning(){return this.controller.ensureRunning();},
  cancel(){return this.controller.cancel();},

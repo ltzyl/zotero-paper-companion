@@ -161,3 +161,9 @@ test('log shortcut reveals only the fixed managed log and rejects a symlink',asy
   fs.unlinkSync(target);fs.symlinkSync(path.join(f.tmp,'absent'),target);await assert.rejects(installer.openLog());assert.equal(revealed.length,1);
  }finally{f.cleanup();}
 });
+
+test('unsupported Windows platform reports clearly before deriving a managed home path',async()=>{
+ const context={URL,Services:{appinfo:{OS:'WINNT'},dirsvc:{get(){throw new Error('Must not derive a macOS path');}},scriptloader:{loadSubScript(uri,target){target.PaperInstallerCore=core;}}}};
+ vm.runInNewContext(fs.readFileSync(nativeFile,'utf8'),context);context.PaperInstallerNative.prototype.readResource=async name=>name==='runtime-manifest.json'?JSON.stringify(manifest):'fixture';
+ await context.PaperInstaller.initialize({win:{URL}},'jar:file:///fixture.xpi!/');assert.equal(context.PaperInstaller.status.state,'unsupported');assert.match(context.PaperInstaller.status.detail,/macOS 14/);assert.equal(await context.PaperInstaller.openLog(),false);
+});

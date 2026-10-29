@@ -12,7 +12,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   $('cancel').hidden=!busy;$('cancel').disabled=status.cancellable===false;$('consent').disabled=busy||ready;$('metrics').disabled=busy||ready;$('manual').disabled=busy;$('close').textContent=ready?'完成':'关闭';
   $('consent-panel').hidden=ready;$('progress').hidden=!busy;
   if(Number.isFinite(status.total)&&status.total>0&&Number.isFinite(status.completed)){$('progress').max=status.total;$('progress').value=Math.min(status.completed,status.total);}else $('progress').removeAttribute('value');
-  $('bytes').textContent=Number.isFinite(status.completed)?'已下载 '+format(status.completed)+(Number.isFinite(status.total)?' / '+format(status.total):''):'';
+  $('bytes').textContent=Number.isFinite(status.completed)?'当前文件已下载 '+format(status.completed)+(Number.isFinite(status.total)?' / '+format(status.total):''):'';
   const current=order[status.phase];for(const step of document.querySelectorAll('#steps li')){const n=order[step.dataset.phase];step.className=current===undefined?'':n<current?'done':n===current?'current':'';if(n===current)step.setAttribute('aria-current','step');else step.removeAttribute('aria-current');}
  }
  $('metrics').checked=!!installer.config.metricsEnabled;

@@ -190,7 +190,11 @@ def consume_pull(stream, progress, check=lambda: None):
         check()
         if len(line) > 65536: raise ValueError('Invalid model progress message')
         data = json.loads(line)
-        if data.get('error'): raise RuntimeError(str(data['error'])[:200])
+        if data.get('error'):
+            error=str(data['error'])
+            if 'redirect target not allowed' in error.lower() and 'non-public' in error.lower():
+                raise RuntimeError('DOWNLOAD_PROXY_REQUIRED')
+            raise RuntimeError(error[:200])
         counts = {k:data[k] for k in ('completed','total') if isinstance(data.get(k),int)}
         if counts: progress.write('model', 'running', 'Downloading Qwen3 model layer', **counts)
         if data.get('status') == 'success': success = True
@@ -376,8 +380,21 @@ def free_port():
 class Cancelled(RuntimeError): pass
 
 
+def validate_download_proxy(value):
+    """Only an explicitly chosen local HTTP forward proxy is supported."""
+    if value == '': return ''
+    try:
+        if not isinstance(value,str): raise ValueError
+        parsed=urllib.parse.urlsplit(value);port=parsed.port
+        if port is None or not 1<=port<=65535 or value!=f'http://127.0.0.1:{port}':raise ValueError
+    except (TypeError,ValueError):
+        raise ValueError('Download proxy must be http://127.0.0.1:<port>') from None
+    return value
+
+
 class Manager:
-    def __init__(self, root, uv, resources, parent_pid):
+    def __init__(self, root, uv, resources, parent_pid, download_proxy=''):
+        self.download_proxy=validate_download_proxy(download_proxy)
         self.root=pathlib.Path(root).resolve();self.resources=pathlib.Path(resources).resolve();self.uv=pathlib.Path(uv).resolve()
         self.root.mkdir(parents=True,exist_ok=True,mode=0o700);self.root.chmod(0o700)
         self.manifest=json.loads((self.resources/'runtime-manifest.json').read_text())
@@ -477,6 +494,8 @@ class Manager:
     def start_ollama(self, version):
         port=free_port();url=f'http://127.0.0.1:{port}'
         env=dict(self.env,OLLAMA_HOST=f'127.0.0.1:{port}',OLLAMA_MODELS=str(self.root/'models'),OLLAMA_NO_CLOUD='1',OLLAMA_KEEP_ALIVE='5m',OLLAMA_ORIGINS='')
+        if self.download_proxy:
+            env.update(HTTP_PROXY=self.download_proxy,HTTPS_PROXY=self.download_proxy,NO_PROXY='127.0.0.1,localhost,::1')
         child=self.children.start([version/'ollama'/self.manifest['ollama']['executable'],'serve'],env=env,cwd=self.root)
         self.wait_http(child,url+'/api/version',lambda data:data.get('version')==self.manifest['ollama']['version'])
         return url,child
@@ -520,9 +539,9 @@ class Manager:
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--uv',required=True);parser.add_argument('--resources',required=True);parser.add_argument('--parent-pid',required=True,type=int);parser.add_argument('command',choices=('install','run','status'));args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--root',required=True);parser.add_argument('--uv',required=True);parser.add_argument('--resources',required=True);parser.add_argument('--parent-pid',required=True,type=int);parser.add_argument('--download-proxy',default='');parser.add_argument('command',choices=('install','run','status'));args=parser.parse_args()
     os.umask(0o077)
-    manager=Manager(args.root,args.uv,args.resources,args.parent_pid)
+    manager=Manager(args.root,args.uv,args.resources,args.parent_pid,download_proxy=args.download_proxy)
     if args.command=='status': print(json.dumps(manager.status()));return 0
     def cancel(*_): manager.cancelled.set()
     for signum in (signal.SIGTERM,signal.SIGINT): signal.signal(signum,cancel)

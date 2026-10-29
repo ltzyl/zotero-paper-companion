@@ -285,6 +285,33 @@ class ManagerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'sync boundary'):manager.install()
         sync=commands[-1];self.assertEqual(sync[sync.index('--index-url')+1],selected);self.assertIn('--require-hashes',sync);self.assertEqual(sync[sync.index('--only-binary')+1],':all:')
         self.assertNotIn('UV_INDEX_URL',manager.env);self.assertEqual(manager.env.get('HOME'),os.environ.get('HOME'))
+    def test_download_proxy_accepts_only_canonical_loopback_http_addresses(self):
+        self.assertTrue(hasattr(m,'validate_download_proxy'),'explicit local download proxy validation is required')
+        for value in ['', 'http://127.0.0.1:1','http://127.0.0.1:7897','http://127.0.0.1:65535']:self.assertEqual(m.validate_download_proxy(value),value)
+        for value in ['https://127.0.0.1:7897','http://localhost:7897','http://127.1:7897','http://192.168.1.1:7897','http://127.0.0.1:0','http://127.0.0.1:65536','http://127.0.0.1:07897','http://127.0.0.1:7897/','http://127.0.0.1:7897/path','http://user:secret@127.0.0.1:7897','http://127.0.0.1:7897?query','http://127.0.0.1:7897#fragment',' http://127.0.0.1:7897','http://127.0.0.1:7897\n']:
+            with self.assertRaises(ValueError):m.validate_download_proxy(value)
+    def test_explicit_proxy_is_passed_only_to_owned_ollama_child(self):
+        self.assertTrue(hasattr(m,'validate_download_proxy'),'optional managed download proxy is required')
+        for proxy in ['', 'http://127.0.0.1:7897']:
+            manager=m.Manager(self.root/'managed',self.root/'uv',SERVICE,os.getpid(),download_proxy=proxy);environments=[]
+            def start(command,**kwargs):environments.append(dict(kwargs['env']));return object()
+            with patch.object(manager.children,'start',side_effect=start),patch.object(manager,'wait_http'),patch.object(manager.children,'poll',return_value=0),patch.object(m,'free_port',return_value=50100):
+                manager.start_ollama(self.root/'version');manager.command([sys.executable,'-c','pass'])
+            ollama,engine=environments
+            for name in ['HTTP_PROXY','HTTPS_PROXY','NO_PROXY']:self.assertNotIn(name,manager.env);self.assertNotIn(name,engine)
+            if proxy:
+                self.assertEqual(ollama['HTTP_PROXY'],proxy);self.assertEqual(ollama['HTTPS_PROXY'],proxy);self.assertEqual(ollama['NO_PROXY'],'127.0.0.1,localhost,::1')
+            else:
+                for name in ['HTTP_PROXY','HTTPS_PROXY','NO_PROXY']:self.assertNotIn(name,ollama)
+    def test_fake_dns_model_failure_is_a_fixed_safe_progress_code(self):
+        manager=self.make_manager();error='download failed: redirect target not allowed: https://example.invalid/blob?signature=fictional-private-value resolves to a non-public address'
+        stream=io.BytesIO((json.dumps({'error':error})+'\n').encode())
+        def fail():m.consume_pull(stream,manager.progress)
+        args=['manager.py','--root',str(manager.root),'--uv',str(self.root/'uv'),'--resources',str(SERVICE),'--parent-pid',str(os.getpid()),'--download-proxy','http://127.0.0.1:7897','install']
+        with patch.object(sys,'argv',args),patch.object(m,'Manager',return_value=manager) as construct,patch.object(manager,'install',side_effect=fail),patch.object(m.signal,'signal'):
+            self.assertEqual(m.main(),1)
+            self.assertEqual(construct.call_args.kwargs['download_proxy'],'http://127.0.0.1:7897')
+        progress=json.loads((manager.root/'progress.json').read_text());self.assertEqual(progress['detail'],'DOWNLOAD_PROXY_REQUIRED');self.assertEqual(progress['status'],'failed');self.assertNotIn('signature',json.dumps(progress))
     def test_bridge_port_conflict_does_not_publish_connection(self):
         import socket
         with socket.socket() as occupied:

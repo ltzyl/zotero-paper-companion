@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh-CN">
+<head>
+ <meta charset="utf-8"/>
+ <title>Paper Companion · 自动设置</title>
+ <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'"/>
+ <link rel="stylesheet" href="setup.css"/>
+ <script src="setup-ui.js" defer="defer"></script>
+</head>
+<body>
+ <main>
+  <p class="eyebrow">PAPER COMPANION</p>
+  <h1>让论文阅读准备就绪</h1>
+  <p class="intro">自动安装独立的 Python、翻译组件和本地总结模型。无需打开终端。</p>
+  <section id="consent-panel" aria-labelledby="privacy-title">
+   <h2 id="privacy-title">开始前，请了解这些信息</h2>
+   <p>首次设置需要联网下载数 GB 文件，至少保留 12 GiB 可用磁盘空间。组件存放在此 Mac 的独立目录中。</p>
+   <p>启用后会尝试下载新论文原文；标题、摘要、选中文字和 PDF 正文会发送到 Bing 翻译。本地总结由此 Mac 上的模型生成。已有文献的中文摘要和简记会在后台补充，英文摘要会备份。</p>
+   <p>不会向 GitHub 上传文库，也不收集遥测。付费论文、扫描版 PDF 或网络服务可能无法处理。</p>
+   <label class="choice"><input id="consent" type="checkbox"/> 我了解以上说明，同意下载并启用</label>
+   <label class="choice secondary"><input id="metrics" type="checkbox"/> 可选：下载公开期刊指标并每周更新（不发送文献列表）</label>
+  </section>
+  <section class="status-panel" aria-live="polite" aria-atomic="true">
+   <h2 id="phase">准备设置</h2>
+   <p id="detail">点击开始后，将先检查 Mac 和可用磁盘空间。</p>
+   <progress id="progress" hidden="hidden"></progress>
+   <p id="bytes" class="bytes"></p>
+   <ol id="steps" aria-label="设置阶段">
+    <li data-phase="checking">检查环境</li>
+    <li data-phase="python">下载 Python</li>
+    <li data-phase="engine">安装翻译组件</li>
+    <li data-phase="model">下载模型</li>
+    <li data-phase="validate">检查服务</li>
+    <li data-phase="ready">可以使用</li>
+   </ol>
+  </section>
+  <div class="actions">
+   <button id="start" class="primary" disabled="disabled">开始自动设置</button>
+   <button id="cancel" hidden="hidden">取消设置</button>
+   <button id="close">关闭</button>
+  </div>
+  <details id="advanced"><summary>高级设置</summary><p>已经自行运行兼容的本机服务时，可以导入连接文件。</p><button id="manual">连接已有服务…</button></details>
+ </main>
+</body>
+</html>

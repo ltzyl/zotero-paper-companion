@@ -1,16 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Validate only managed packages/assets; optionally translate a fictional PDF.
 
-Run with the private engine Python and private HOME. No Zotero profile or
+Run with the private engine Python and explicit managed data directory. No Zotero profile or
 literature folder is inspected. Network translation is used only for --smoke.
 """
 import argparse
 import hashlib
 import importlib.metadata
 import json
+import os
 import pathlib
 import subprocess
 import sys
+import sysconfig
 import tempfile
 
 
@@ -27,16 +29,20 @@ def validate(resources):
         raise RuntimeError('Installed Python does not match pinned runtime')
     for name,version in manifest['engine']['versions'].items():
         if importlib.metadata.version(name)!=version:raise RuntimeError('Installed package version mismatch: '+name)
+    data_root=pathlib.Path(os.environ['PAPER_COMPANION_DATA'])
+    site=pathlib.Path(sysconfig.get_paths()['purelib'])
+    for patch in manifest['engine']['pathPatches']:
+        if digest(site/patch['path'])!=patch['patchedSHA256']:raise RuntimeError('Managed dependency data-path fix is missing')
     from pdf2zh_next.translator.translator_impl import bing
     if digest(bing.__file__)!=digest(resources/'bing_compat.py'):raise RuntimeError('Bing compatibility fix is missing')
     for asset in manifest['resources']:
-        path=pathlib.Path.home()/asset['path'];algorithm='sha256' if 'sha256' in asset else 'sha3_256'
+        path=data_root/asset['path'];algorithm='sha256' if 'sha256' in asset else 'sha3_256'
         if not path.is_file() or ('size' in asset and path.stat().st_size!=asset['size']) or digest(path,algorithm)!=asset[algorithm]:
             raise RuntimeError('Required managed PDF asset is missing or corrupt: '+path.name)
     import pymupdf
     import onnxruntime
     from babeldoc.assets import assets
-    font=pathlib.Path.home()/'.cache/babeldoc/fonts/SourceHanSansCN-Regular.ttf'
+    font=data_root/'.cache/babeldoc/fonts/SourceHanSansCN-Regular.ttf'
     pymupdf.Font(fontfile=str(font))
     onnxruntime.InferenceSession(str(assets.get_doclayout_onnx_model_path()),providers=['CPUExecutionProvider'])
     print('Pinned engine, Bing fix, PDF model, fonts and character maps are ready',flush=True)

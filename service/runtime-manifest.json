@@ -166,7 +166,50 @@
       "xinference-client": "4.1.0",
       "xsdata": "26.10",
       "yarl": "1.25.1"
-    }
+    },
+    "pathPatches": [
+      {
+        "path": "babeldoc/const.py",
+        "sourceSHA256": "a5ccedd3b1aa49d4cf644d143cad74d9822aa3283d5d8aac24d9804f1ef155f6",
+        "patchedSHA256": "e6a0e55741a995667349b05d1f49782ab421c9ef055c61a88fd90b0573dfa8df",
+        "replacements": [
+          {
+            "before": "CACHE_FOLDER = Path.home() / \".cache\" / \"babeldoc\"",
+            "after": "CACHE_FOLDER = Path(os.environ[\"PAPER_COMPANION_DATA\"]) / \".cache\" / \"babeldoc\""
+          }
+        ]
+      },
+      {
+        "path": "pdf2zh_next/const.py",
+        "sourceSHA256": "8b851bab92f6605f91f31a3814c1373ae94069cdd298ff2891d02bc7ffc3fa66",
+        "patchedSHA256": "b62d8d791823635345b5aaa9c963260220728b1adeb9223b9c248e09b5b61baf",
+        "replacements": [
+          {
+            "before": "from pathlib import Path\n",
+            "after": "import os\nfrom pathlib import Path\n"
+          },
+          {
+            "before": "DEFAULT_CONFIG_DIR = Path(\"~/.config/pdf2zh\").expanduser()",
+            "after": "DEFAULT_CONFIG_DIR = Path(os.environ[\"PAPER_COMPANION_DATA\"]) / \"config\" / \"pdf2zh\""
+          }
+        ]
+      },
+      {
+        "path": "pdf2zh_next/translator/cache.py",
+        "sourceSHA256": "68d351102e6761abd3a7ffeda30918eb271fe44e6744d29cb6472e95ee2c6d8b",
+        "patchedSHA256": "be24c1e0a285b61a44125df4c27d369232985b218e205067af92d8c0a91c8042",
+        "replacements": [
+          {
+            "before": "import json\n",
+            "after": "import os\nimport json\n"
+          },
+          {
+            "before": "cache_folder = Path.home() / \".cache\" / \"pdf2zh_next\"",
+            "after": "cache_folder = Path(os.environ[\"PAPER_COMPANION_DATA\"]) / \".cache\" / \"pdf2zh_next\""
+          }
+        ]
+      }
+    ]
   },
   "model": {
     "name": "qwen3:4b",

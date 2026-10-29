@@ -33,6 +33,22 @@ class ManagerTests(unittest.TestCase):
             archive=self.root/'bad.tgz';archive.write_bytes(buf.getvalue())
             with self.assertRaises(ValueError): m.safe_extract(archive,self.root/'out')
         self.assertFalse((self.root.parent/'escape').exists())
+    def make_archive(self, entries):
+        archive=self.root/'fixture.tgz'
+        with tarfile.open(archive,'w:gz') as tar:
+            for name,kind,value in entries:
+                item=tarfile.TarInfo(name);item.type=kind
+                if kind in (tarfile.SYMTYPE,tarfile.LNKTYPE):item.linkname=value;tar.addfile(item)
+                else:item.size=len(value);tar.addfile(item,io.BytesIO(value))
+        return archive
+    def test_archive_preserves_ollama_internal_library_symlink(self):
+        archive=self.make_archive([('libggml-base.0.dylib',tarfile.SYMTYPE,'libggml-base.0.28.0.dylib'),('libggml-base.0.28.0.dylib',tarfile.REGTYPE,b'fictional-dylib'),('nested/alias',tarfile.SYMTYPE,'../libggml-base.0.dylib')])
+        out=self.root/'out';m.safe_extract(archive,out)
+        self.assertTrue((out/'libggml-base.0.dylib').is_symlink());self.assertEqual((out/'nested/alias').read_bytes(),b'fictional-dylib')
+    def test_archive_rejects_link_escape_chains_and_missing_targets(self):
+        for entries in [[('a',tarfile.SYMTYPE,'b'),('b',tarfile.SYMTYPE,'../../escape')],[('a',tarfile.SYMTYPE,'b'),('b',tarfile.SYMTYPE,'a')],[('a',tarfile.SYMTYPE,'missing')],[('a',tarfile.SYMTYPE,'file'),('a/overwrite',tarfile.REGTYPE,b'x'),('file',tarfile.REGTYPE,b'x')]]:
+            archive=self.make_archive(entries)
+            with self.assertRaises(ValueError):m.safe_extract(archive,self.root/'out')
     def test_download_validates_hash_and_never_promotes_corruption(self):
         self.assertTrue(hasattr(m, 'download'), 'verified downloader is required')
         import http.server
@@ -91,6 +107,84 @@ class ManagerTests(unittest.TestCase):
         deadline=time.monotonic()+5
         while not heartbeat.exists() and time.monotonic()<deadline: time.sleep(.02)
         self.assertTrue(heartbeat.exists());children.close();before=heartbeat.read_text();time.sleep(.1);self.assertEqual(heartbeat.read_text(),before)
+    def test_exited_leader_retains_owned_group_until_descendants_stop(self):
+        children=m.Children(self.root);heartbeat=self.root/'heartbeat';pidfile=self.root/'descendant.pid'
+        grandchild="import os,signal,time,pathlib;signal.signal(signal.SIGTERM,signal.SIG_IGN);pathlib.Path(%r).write_text(str(os.getpid()));p=pathlib.Path(%r);\nwhile True:p.write_text(str(time.monotonic()));time.sleep(.03)" % (str(pidfile),str(heartbeat))
+        script="import subprocess,sys;subprocess.Popen([sys.executable,'-c',%r]);sys.exit(7)" % grandchild
+        leader=children.start([sys.executable,'-c',script])
+        try:
+            deadline=time.monotonic()+5
+            while (not heartbeat.exists() or children.poll(leader) is None) and time.monotonic()<deadline:time.sleep(.02)
+            self.assertEqual(children.poll(leader),7)
+            self.assertIsNone(leader.returncode,'poll must leave the leader unreaped and reserve its PID')
+            children.close();before=heartbeat.read_text();time.sleep(.12);self.assertEqual(heartbeat.read_text(),before)
+        finally:
+            children.close()
+            if pidfile.exists():
+                with __import__('contextlib').suppress(ProcessLookupError):os.kill(int(pidfile.read_text()),signal.SIGKILL)
+    def test_loopback_api_does_not_follow_authenticated_redirects(self):
+        import http.server,urllib.error
+        seen=[]
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path=='/start':self.send_response(302);self.send_header('Location','/destination');self.end_headers()
+                else:seen.append(self.headers.get('X-Paper-Companion-Token'));self.send_response(200);self.end_headers();self.wfile.write(b'{}')
+            def log_message(self,*args):pass
+        server=http.server.ThreadingHTTPServer(('127.0.0.1',0),H);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        try:
+            with self.assertRaises(urllib.error.HTTPError):m.request_json(f'http://127.0.0.1:{server.server_port}/start',token='synthetic-token')
+            self.assertEqual(seen,[])
+        finally:server.shutdown();server.server_close();thread.join()
+    def make_manager(self):return m.Manager(self.root/'managed',self.root/'uv',SERVICE,os.getpid())
+    def test_manager_preserves_home_and_uses_explicit_private_data(self):
+        manager=self.make_manager()
+        self.assertEqual(manager.env.get('HOME'),os.environ.get('HOME'))
+        self.assertEqual(manager.env.get('PAPER_COMPANION_DATA'),str(manager.root/'data'))
+        self.assertNotEqual(pathlib.Path(manager.env['PAPER_COMPANION_DATA']),pathlib.Path.home())
+    def test_dependency_path_patches_are_hash_checked_and_never_use_home(self):
+        self.assertTrue(hasattr(m,'apply_path_patches'),'managed dependency path patches are required')
+        import ast
+        manifest=json.loads((SERVICE/'runtime-manifest.json').read_text());site=self.root/'site';managed=self.root/'data'
+        fixtures={'babeldoc/const.py':'import os\nfrom pathlib import Path\nCACHE_FOLDER = Path.home() / ".cache" / "babeldoc"\n','pdf2zh_next/const.py':'from pathlib import Path\nDEFAULT_CONFIG_DIR = Path("~/.config/pdf2zh").expanduser()\n','pdf2zh_next/translator/cache.py':'import json\nfrom pathlib import Path\ndef init_db():\n    cache_folder = Path.home() / ".cache" / "pdf2zh_next"\n'}
+        for item in manifest['engine']['pathPatches']:
+            source=fixtures[item['path']];patched=source
+            for change in item['replacements']:patched=patched.replace(change['before'],change['after'])
+            item['sourceSHA256']=hashlib.sha256(source.encode()).hexdigest();item['patchedSHA256']=hashlib.sha256(patched.encode()).hexdigest()
+            target=site/item['path'];target.parent.mkdir(parents=True,exist_ok=True);target.write_text(source)
+        m.apply_path_patches(site,manifest)
+        for item in manifest['engine']['pathPatches']:
+            target=site/item['path'];self.assertEqual(m.file_hash(target),item['patchedSHA256'])
+            assignments=[n for n in ast.walk(ast.parse(target.read_text())) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id in ('CACHE_FOLDER','DEFAULT_CONFIG_DIR','cache_folder') for t in n.targets)]
+            self.assertEqual(len(assignments),1)
+            expression=compile(ast.Expression(assignments[0].value),'<managed-path>','eval')
+            with patch.dict(os.environ,{'PAPER_COMPANION_DATA':str(managed)}),patch.object(pathlib.Path,'home',side_effect=AssertionError('must not inspect HOME')):
+                value=eval(expression,{'Path':pathlib.Path,'os':os})
+            self.assertIn(managed,value.parents)
+        m.apply_path_patches(site,manifest) # Retry accepts the exact same patch.
+        victim=site/manifest['engine']['pathPatches'][0]['path'];victim.write_text('unexpected contents')
+        with self.assertRaisesRegex(RuntimeError,'patch'):m.apply_path_patches(site,manifest)
+    def test_command_cancellation_remains_cancelled_after_child_shutdown(self):
+        manager=self.make_manager()
+        def cancel():
+            time.sleep(.15);manager.cancelled.set();manager.children.close()
+        thread=threading.Thread(target=cancel);thread.start()
+        try:
+            with self.assertRaises(m.Cancelled):manager.command([sys.executable,'-c','import time;time.sleep(30)'])
+        finally:thread.join();manager.children.close()
+    def test_failed_same_fingerprint_reinstall_keeps_published_runner(self):
+        manager=self.make_manager();old=manager.root/'staging'/manager.version;old.mkdir(parents=True);runner=old/'ollama'/'ollama';runner.parent.mkdir();runner.write_bytes(b'known working')
+        (old/'validated.json').write_text(json.dumps({'version':manager.version,'fingerprint':manager.version}))
+        versions=manager.root/'versions';versions.mkdir();(versions/manager.version).symlink_to(pathlib.Path('..')/'staging'/manager.version,target_is_directory=True)
+        m.atomic_json(manager.root/'current.json',{'version':manager.version})
+        def fake_command(command,**kwargs):
+            if 'sync' in command:
+                python=pathlib.Path(command[command.index('--python')+1]);site=python.parent.parent/'lib/python3.12/site-packages'
+                (site/'pdf2zh_next/translator/translator_impl').mkdir(parents=True,exist_ok=True)
+        manager.manifest['resources']=[]
+        with patch.object(m.platform,'python_version',return_value=manager.manifest['python']['version']),patch.object(m.platform,'system',return_value='Darwin'),patch.object(m.platform,'machine',return_value='arm64'),patch.object(m.platform,'mac_ver',return_value=('14.0',(),'')),patch.object(m.shutil,'disk_usage',return_value=__import__('collections').namedtuple('Usage','total used free')(100,0,10**15)),patch.object(manager,'command',side_effect=fake_command),patch.object(m,'apply_path_patches'),patch.object(m,'download'),patch.object(m,'safe_extract',side_effect=RuntimeError('Synthetic extraction failure')):
+            with self.assertRaisesRegex(RuntimeError,'extraction failure'):manager.install()
+        self.assertEqual(manager.current(),versions/manager.version);self.assertEqual(runner.read_bytes(),b'known working')
+        self.assertFalse((old/'installing.json').exists(),'a published generation must never be reopened for writes')
     def test_bridge_port_conflict_does_not_publish_connection(self):
         import socket
         with socket.socket() as occupied:

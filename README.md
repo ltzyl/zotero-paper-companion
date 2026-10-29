@@ -29,7 +29,7 @@
 
 自动设置支持 **macOS 14 或更高版本、Apple Silicon（M 系列芯片）和 Zotero 10**。首次设置需要联网下载数 GB 文件，请预留至少 12 GiB 可用磁盘空间。
 
-1. 从 [Releases](https://github.com/ltzyl/zotero-paper-companion/releases/latest) 下载 `paper-companion-*.xpi`。
+1. 从 [Releases](https://github.com/ltzyl/zotero-paper-companion/releases) 下载 `paper-companion-*.xpi`。
 2. 在 Zotero「工具 → 插件」中，点击齿轮菜单，选择「从文件安装插件」，打开下载的 `.xpi`。
 3. 打开「工具 → Paper Companion：设置与运行状态」，阅读说明并点击「开始自动设置」。
 

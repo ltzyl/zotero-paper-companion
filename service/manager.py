@@ -336,7 +336,7 @@ class Manager:
         engine=stage/'venv';python=engine/'bin'/'python'
         self.progress.write('engine','running','Installing locked translation components')
         if not python.exists(): self.command([self.uv,'venv','--python',sys.executable,str(engine)])
-        self.command([self.uv,'pip','sync','--python',python,'--require-hashes','--only-binary',':all:',self.resources/'engine-requirements.lock'],timeout=1800)
+        self.command([self.uv,'pip','sync','--python',python,'--require-hashes','--only-binary',':all:',self.resources/'engine-requirements.lock'],timeout=5400)
         # site-packages is deterministic for this pinned Python minor version.
         site=engine/'lib'/'python3.12'/'site-packages';patch=site/'pdf2zh_next'/'translator'/'translator_impl'/'bing.py'
         shutil.copy2(self.resources/'bing_compat.py',patch)

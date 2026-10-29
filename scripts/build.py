@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Deterministic, allowlisted archives; never package a local Zotero profile."""
-import hashlib,json,pathlib,re,zipfile
+import argparse,hashlib,json,pathlib,re,zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ADDON='bootstrap.js companions.js core.js enrichment.js journal-data.js manifest.json metadata-core.js metadata.js metrics-core.js metrics-update-core.js metrics-updater.js metrics.js pane-core.js public-config.js reading-pane.js references-core.js workflow.js citation-graph.html installer.js installer-core.js setup.xhtml setup-ui.js setup.css'.split()
 RUNTIME=['service/'+n for n in 'manager.py server.py engine_probe.py bing_compat.py runtime-manifest.json python-downloads.json engine-requirements.lock engine-requirements.in'.split()]
@@ -24,13 +24,15 @@ def archive(dest,files,prefix=''):
    z.writestr(entry,(ROOT/name).read_bytes())
 
 def main():
+ parser=argparse.ArgumentParser();parser.add_argument('--legacy-runtime',action='store_true',help='Also build the optional manual-service archive');args=parser.parse_args()
  manifest=json.loads((ROOT/'addon/manifest.json').read_text());version=manifest['version'];dest=ROOT/'dist';dest.mkdir(exist_ok=True)
  files=['addon/'+n for n in ADDON]+RUNTIME+SERVICE;audit(files)
  xpi=dest/f'paper-companion-{version}.xpi';runtime=dest/f'paper-companion-runtime-{version}.zip'
- archive(xpi,['addon/'+n for n in ADDON]+RUNTIME+['LICENSE','THIRD_PARTY.md'],prefix='addon/');archive(runtime,SERVICE)
+ archive(xpi,['addon/'+n for n in ADDON]+RUNTIME+['LICENSE','THIRD_PARTY.md'],prefix='addon/')
+ if args.legacy_runtime:archive(runtime,SERVICE)
  digest=hashlib.sha256(xpi.read_bytes()).hexdigest()
  updates={'addons':{manifest['applications']['zotero']['id']:{'updates':[{'version':version,'update_link':f'https://github.com/ltzyl/zotero-paper-companion/releases/download/v{version}/{xpi.name}','update_hash':'sha256:'+digest,'applications':{'zotero':{'strict_min_version':'10.0','strict_max_version':'10.*'}}}]}}}
  (ROOT/'updates.json').write_text(json.dumps(updates,indent=2)+'\n');(dest/'updates.json').write_bytes((ROOT/'updates.json').read_bytes())
- (dest/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in [xpi,runtime,dest/'updates.json']))
- print('Built and audited:',xpi.name,runtime.name)
+ (dest/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in [xpi,*([runtime] if args.legacy_runtime else []),dest/'updates.json']))
+ print('Built and audited:',xpi.name,*([runtime.name] if args.legacy_runtime else []))
 if __name__=='__main__':main()

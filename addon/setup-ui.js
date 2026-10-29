@@ -9,7 +9,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   state=status;busy=status.state==='running';const ready=status.phase==='ready';
   $('phase').textContent=labels[status.phase]||'自动设置';$('detail').textContent=status.detail||'点击开始后，将先检查 Mac 和可用磁盘空间。';
   $('start').hidden=busy||ready;$('start').disabled=!$('consent').checked||status.state==='unsupported';$('start').textContent=['failed','cancelled'].includes(status.state)?'重试自动设置':'开始自动设置';
-  $('cancel').hidden=!busy;$('cancel').disabled=status.cancellable===false;$('consent').disabled=busy||ready;$('metrics').disabled=busy||ready;$('manual').disabled=busy;$('download-proxy').disabled=busy||ready;if(status.state==='failed'&&status.detail?.includes('本机 HTTP'))$('advanced').open=true;$('close').textContent=ready?'完成':'关闭';
+  $('cancel').hidden=!busy;$('cancel').disabled=status.cancellable===false;$('consent').disabled=busy||ready;$('metrics').disabled=busy||ready;$('manual').disabled=busy;$('download-proxy').disabled=busy||ready;if(status.state==='failed'&&status.detail?.includes('本机 HTTP'))$('advanced').open=true;$('close').textContent=busy?'后台继续':ready?'完成':'关闭';$('background-hint').hidden=!busy;
   $('consent-panel').hidden=ready;$('progress').hidden=!busy;
   if(Number.isFinite(status.total)&&status.total>0&&Number.isFinite(status.completed)){$('progress').max=status.total;$('progress').value=Math.min(status.completed,status.total);}else $('progress').removeAttribute('value');
   $('bytes').textContent=Number.isFinite(status.completed)?'当前文件已下载 '+format(status.completed)+(Number.isFinite(status.total)?' / '+format(status.total):''):'';
@@ -23,5 +23,5 @@ window.addEventListener('DOMContentLoaded',()=>{
  $('manual').addEventListener('click',async()=>{try{await installer.config.setupManual();}catch(error){$('detail').textContent=String(error.message||'无法读取本机连接文件');}});
  $('logs').addEventListener('click',async()=>{try{if(!await installer.openLog())$('detail').textContent='日志将在安装本机组件后生成。';}catch(_){$('detail').textContent='暂时无法打开日志文件夹。';}});
  const unsubscribe=installer.subscribe(render);
- window.addEventListener('unload',()=>{unsubscribe();if(busy)installer.cancel().catch(()=>{});},{once:true});
+ window.addEventListener('unload',()=>{unsubscribe();},{once:true});
 },{once:true});

@@ -196,10 +196,70 @@ class ManagerTests(unittest.TestCase):
                 python=pathlib.Path(command[command.index('--python')+1]);site=python.parent.parent/'lib/python3.12/site-packages'
                 (site/'pdf2zh_next/translator/translator_impl').mkdir(parents=True,exist_ok=True)
         manager.manifest['resources']=[]
-        with patch.object(m.platform,'python_version',return_value=manager.manifest['python']['version']),patch.object(m.platform,'system',return_value='Darwin'),patch.object(m.platform,'machine',return_value='arm64'),patch.object(m.platform,'mac_ver',return_value=('14.0',(),'')),patch.object(m.shutil,'disk_usage',return_value=__import__('collections').namedtuple('Usage','total used free')(100,0,10**15)),patch.object(manager,'command',side_effect=fake_command),patch.object(m,'apply_path_patches'),patch.object(m,'download'),patch.object(m,'safe_extract',side_effect=RuntimeError('Synthetic extraction failure')):
+        with patch.object(m.platform,'python_version',return_value=manager.manifest['python']['version']),patch.object(m.platform,'system',return_value='Darwin'),patch.object(m.platform,'machine',return_value='arm64'),patch.object(m.platform,'mac_ver',return_value=('14.0',(),'')),patch.object(m.shutil,'disk_usage',return_value=__import__('collections').namedtuple('Usage','total used free')(100,0,10**15)),patch.object(manager,'command',side_effect=fake_command),patch.object(m,'apply_path_patches'),patch.object(m,'download'),patch.object(m,'safe_extract',side_effect=RuntimeError('Synthetic extraction failure')),patch.object(m,'select_package_index',create=True,return_value='https://pypi.org/simple'):
             with self.assertRaisesRegex(RuntimeError,'extraction failure'):manager.install()
         self.assertEqual(manager.current(),versions/manager.version);self.assertEqual(runner.read_bytes(),b'known working')
         self.assertFalse((old/'installing.json').exists(),'a published generation must never be reopened for writes')
+    def test_package_index_prefers_pypi_unless_mirror_is_clearly_faster(self):
+        self.assertTrue(hasattr(m,'choose_package_index'),'automatic package index selection is required')
+        pypi='https://pypi.org/simple';tuna='https://pypi.tuna.tsinghua.edu.cn/simple'
+        for scores,expected in [({pypi:100,tuna:140},pypi),({pypi:100,tuna:160},tuna),({pypi:100,tuna:None},pypi),({pypi:None,tuna:100},tuna),({pypi:None,tuna:None},pypi)]:
+            self.assertEqual(m.choose_package_index(scores),expected)
+    def test_package_index_probes_run_in_parallel_and_have_an_absolute_deadline(self):
+        self.assertTrue(hasattr(m,'select_package_index'),'bounded parallel probes are required')
+        barrier=threading.Barrier(2)
+        def probe(source,deadline,stop,register):
+            barrier.wait(timeout=.5)
+            return 200 if 'tuna' in source['index'] else 100
+        with patch.object(m,'probe_package_source',side_effect=probe):self.assertIn('tuna',m.select_package_index(timeout=.5))
+        def stalled(source,deadline,stop,register):stop.wait(2);return None
+        started=time.monotonic()
+        with patch.object(m,'probe_package_source',side_effect=stalled):self.assertEqual(m.select_package_index(timeout=.08),'https://pypi.org/simple')
+        self.assertLess(time.monotonic()-started,.4)
+    def test_package_probe_caps_bytes_and_checks_deadline_between_partial_reads(self):
+        self.assertTrue(hasattr(m,'probe_package_source'),'bounded HTTPS source probe is required')
+        class Sock:
+            def __init__(self):self.timeouts=[]
+            def settimeout(self,value):self.timeouts.append(value)
+        class Response:
+            status=200
+            def __init__(self,delay=0):self.count=0;self.delay=delay
+            def read1(self,size):time.sleep(self.delay);self.count+=size;return (b'PK\x03\x04'+b'x'*size)[:size]
+            def close(self):pass
+        class Connection:
+            def __init__(self,response):self.sock=Sock();self.response=response;self.closed=False
+            def connect(self):pass
+            def request(self,*args,**kwargs):self.headers=kwargs['headers']
+            def getresponse(self):return self.response
+            def close(self):self.closed=True
+        source={'index':'https://pypi.org/simple','url':'https://files.pythonhosted.org/packages/public.whl'}
+        response=Response();connection=Connection(response)
+        with patch.object(m.http.client,'HTTPSConnection',return_value=connection):score=m.probe_package_source(source,time.monotonic()+1,threading.Event(),lambda conn:None)
+        self.assertGreater(score,0);self.assertEqual(response.count,65536);self.assertTrue(connection.closed)
+        self.assertIn('Range',connection.headers);self.assertTrue(all(0<t<=1 for t in connection.sock.timeouts))
+        response=Response(.025);connection=Connection(response);started=time.monotonic()
+        with patch.object(m.http.client,'HTTPSConnection',return_value=connection):m.probe_package_source(source,started+.04,threading.Event(),lambda conn:None)
+        self.assertLess(time.monotonic()-started,.15);self.assertLess(response.count,65536)
+    def test_package_probe_rejects_untrusted_hosts_http_redirects_and_html(self):
+        self.assertTrue(hasattr(m,'probe_package_source'),'trusted HTTPS probes are required')
+        for url in ['http://files.pythonhosted.org/packages/a.whl','https://evil.example/a.whl','https://files.pythonhosted.org.evil.example/a.whl','https://user:password@files.pythonhosted.org/a.whl']:
+            with patch.object(m.http.client,'HTTPSConnection') as connect:
+                self.assertIsNone(m.probe_package_source({'url':url},time.monotonic()+1,threading.Event(),lambda conn:None));connect.assert_not_called()
+        for status,payload in [(302,b''),(200,b'<html>')]:
+            response=__import__('unittest.mock',fromlist=['Mock']).Mock(status=status);response.read1.return_value=payload
+            connection=__import__('unittest.mock',fromlist=['Mock']).Mock();connection.getresponse.return_value=response
+            with patch.object(m.http.client,'HTTPSConnection',return_value=connection):self.assertIsNone(m.probe_package_source({'url':'https://files.pythonhosted.org/a.whl'},time.monotonic()+1,threading.Event(),lambda conn:None))
+    def test_engine_sync_passes_selected_index_and_keeps_hash_and_binary_requirements(self):
+        self.assertTrue(hasattr(m,'select_package_index'),'engine install must select an explicit index')
+        manager=self.make_manager();commands=[]
+        def command(args,**kwargs):
+            commands.append(args)
+            if 'sync' in args:raise RuntimeError('Synthetic sync boundary')
+        selected='https://pypi.tuna.tsinghua.edu.cn/simple'
+        with patch.object(m,'select_package_index',return_value=selected),patch.object(manager,'command',side_effect=command),patch.object(m.platform,'python_version',return_value=manager.manifest['python']['version']),patch.object(m.platform,'system',return_value='Darwin'),patch.object(m.platform,'machine',return_value='arm64'),patch.object(m.platform,'mac_ver',return_value=('14.0',(),'')),patch.object(m.shutil,'disk_usage',return_value=__import__('collections').namedtuple('Usage','total used free')(100,0,10**15)):
+            with self.assertRaisesRegex(RuntimeError,'sync boundary'):manager.install()
+        sync=commands[-1];self.assertEqual(sync[sync.index('--index-url')+1],selected);self.assertIn('--require-hashes',sync);self.assertEqual(sync[sync.index('--only-binary')+1],':all:')
+        self.assertNotIn('UV_INDEX_URL',manager.env);self.assertEqual(manager.env.get('HOME'),os.environ.get('HOME'))
     def test_bridge_port_conflict_does_not_publish_connection(self):
         import socket
         with socket.socket() as occupied:

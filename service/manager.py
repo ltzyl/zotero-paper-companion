@@ -9,11 +9,13 @@ import contextlib
 import ctypes
 import fcntl
 import hashlib
+import http.client
 import json
 import os
 import pathlib
 import platform
 import posixpath
+import queue
 import secrets
 import shutil
 import signal
@@ -282,6 +284,89 @@ def request_json(url, data=None, token=None, timeout=30):
     with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(request,timeout=timeout) as response: return json.load(response)
 
 
+# Same immutable BabelDOC 0.6.2 wheel, verified against PyPI JSON and the
+# mirror's index. Probes sample bytes only; uv still verifies the complete lock.
+_PACKAGE_WHEEL = '/packages/a1/66/d4cd53a4f211fe76ba7f0663e4ba1ba79a41c06fdfbb2add6b1a189ec619/babeldoc-0.6.2-py3-none-any.whl'
+PACKAGE_SOURCES = (
+    {'index':'https://pypi.org/simple','url':'https://files.pythonhosted.org'+_PACKAGE_WHEEL},
+    {'index':'https://pypi.tuna.tsinghua.edu.cn/simple','url':'https://pypi.tuna.tsinghua.edu.cn'+_PACKAGE_WHEEL},
+)
+
+
+def probe_package_source(source, deadline, stop, register):
+    """Read at most 64 KiB from a known HTTPS host; never follow redirects."""
+    connection = response = None
+    started = time.monotonic()
+    try:
+        url = urllib.parse.urlsplit(source['url'])
+        if url.scheme != 'https' or url.hostname not in ('files.pythonhosted.org','pypi.tuna.tsinghua.edu.cn') or url.username or url.password or url.port not in (None,443): return None
+        if stop.is_set() or started >= deadline: return None
+        connection = http.client.HTTPSConnection(url.hostname,timeout=min(1,deadline-started))
+        register(connection)
+        if stop.is_set(): return None
+        connection.connect()
+        probe_socket=connection.sock
+        if probe_socket is None or stop.is_set() or time.monotonic() >= deadline: return None
+        probe_socket.settimeout(min(1,deadline-time.monotonic()))
+        connection.request('GET',url.path,headers={'Range':'bytes=0-65535','Accept-Encoding':'identity','User-Agent':'Paper-Companion/1'})
+        response = connection.getresponse()
+        if response.status not in (200,206): return None
+        completed = 0;prefix = b''
+        while completed < 65536 and not stop.is_set():
+            remaining = deadline-time.monotonic()
+            if remaining <= 0: break
+            probe_socket.settimeout(min(1,remaining))
+            # read1 returns available bytes instead of waiting to fill a buffer;
+            # a slow stream therefore cannot extend the absolute deadline.
+            chunk = response.read1(min(8192,65536-completed))
+            if not chunk: break
+            prefix = (prefix+chunk)[:4];completed += len(chunk)
+            if len(prefix) == 4 and prefix != b'PK\x03\x04': return None
+        if completed < 4 or prefix != b'PK\x03\x04': return None
+        return completed/max(time.monotonic()-started,.001)
+    except (OSError,ValueError,http.client.HTTPException): return None
+    finally:
+        if response is not None:
+            with contextlib.suppress(OSError): response.close()
+        if connection is not None: connection.close()
+
+
+def choose_package_index(scores):
+    official,mirror = (source['index'] for source in PACKAGE_SOURCES)
+    pypi,tuna = scores.get(official),scores.get(mirror)
+    # Keep the original source when measurements are close or inconclusive.
+    return mirror if tuna and (not pypi or tuna >= 1.5*pypi) else official
+
+
+def select_package_index(check=lambda:None, timeout=4):
+    """Probe in parallel with one shared deadline, including connection stalls."""
+    deadline=time.monotonic()+timeout;stop=threading.Event();results=queue.Queue();connections=[];lock=threading.Lock()
+    def register(connection):
+        with lock: connections.append(connection)
+    def worker(source):
+        results.put((source['index'],probe_package_source(source,deadline,stop,register)))
+    for source in PACKAGE_SOURCES: threading.Thread(target=worker,args=(source,),daemon=True).start()
+    scores={}
+    try:
+        while len(scores)<len(PACKAGE_SOURCES):
+            check();remaining=deadline-time.monotonic()
+            if remaining<=0: break
+            try:
+                index,score=results.get(timeout=min(.05,remaining));scores[index]=score
+            except queue.Empty: pass
+    finally:
+        stop.set()
+        # Interrupt owned probe sockets as well as imposing read timeouts. DNS
+        # can outlive a socket timeout; daemon workers check stop before sending.
+        with lock:
+            for connection in connections:
+                if connection.sock is not None:
+                    with contextlib.suppress(OSError): connection.sock.shutdown(socket.SHUT_RDWR)
+                connection.close()
+    check()
+    return choose_package_index(scores)
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1',0));return sock.getsockname()[1]
@@ -336,7 +421,10 @@ class Manager:
         engine=stage/'venv';python=engine/'bin'/'python'
         self.progress.write('engine','running','Installing locked translation components')
         if not python.exists(): self.command([self.uv,'venv','--python',sys.executable,str(engine)])
-        self.command([self.uv,'pip','sync','--python',python,'--require-hashes','--only-binary',':all:',self.resources/'engine-requirements.lock'],timeout=5400)
+        self.progress.write('engine','running','Checking available package download sources')
+        index=select_package_index(self.check)
+        self.progress.write('engine','running','Installing locked translation components')
+        self.command([self.uv,'pip','sync','--python',python,'--index-url',index,'--require-hashes','--only-binary',':all:',self.resources/'engine-requirements.lock'],timeout=5400)
         # site-packages is deterministic for this pinned Python minor version.
         site=engine/'lib'/'python3.12'/'site-packages';patch=site/'pdf2zh_next'/'translator'/'translator_impl'/'bing.py'
         shutil.copy2(self.resources/'bing_compat.py',patch)

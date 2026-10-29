@@ -3,7 +3,7 @@
 import hashlib,json,pathlib,re,zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ADDON='bootstrap.js companions.js core.js enrichment.js journal-data.js manifest.json metadata-core.js metadata.js metrics-core.js metrics-update-core.js metrics-updater.js metrics.js pane-core.js public-config.js reading-pane.js references-core.js workflow.js citation-graph.html'.split()
-SERVICE=['service/server.py','service/install.py','service/bing_compat.py','LICENSE','THIRD_PARTY.md','PRIVACY.md','README.md','docs/ARCHITECTURE.md','docs/VALIDATION.md','docs/demo.svg','examples/demo.html','examples/fictional-library.json']
+SERVICE=['service/server.py','service/install.py','service/bing_compat.py','LICENSE','THIRD_PARTY.md','PRIVACY.md','README.md','docs/ARCHITECTURE.md','docs/demo.svg','examples/demo.html','examples/fictional-library.json']
 
 def audit(files):
  for name in files:
